@@ -1,0 +1,86 @@
+:root{
+  --bg0:#0B0D12;
+  --bg1:#0F1320;
+  --panel:#12172A;
+  --border: rgba(255,255,255,0.10);
+  --text:#EAF0FF;
+  --textDim: rgba(234,240,255,0.75);
+  --accentA:#14F195;
+  --accentB:#9945FF;
+  --good:#2EE59D;
+  --bad:#FF4D6D;
+  --warn:#FFB020;
+  --link:#7CC4FF;
+}
+
+html,body{ background:var(--bg0); color:var(--text); margin:0; padding:0; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial; }
+*{ box-sizing:border-box; }
+a{ color:var(--link); }
+.container{ max-width:1080px; margin:0 auto; padding:28px 16px; }
+.panel{
+  border:1px solid var(--border);
+  background:var(--panel);
+  border-radius:18px;
+  padding:16px;
+}
+.grid{
+  display:grid;
+  gap:14px;
+}
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(0,0,0,0.25);
+  font-size:12px;
+  color:var(--textDim);
+  font-weight:800;
+}
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:12px 16px;
+  border-radius:16px;
+  text-decoration:none;
+  font-weight:900;
+  border:1px solid var(--border);
+  background:var(--bg0);
+  color:var(--text);
+}
+.btnPrimary{
+  background: linear-gradient(90deg, var(--accentA), var(--accentB));
+  color:#0B0D12;
+  border:0;
+}
+.kpi{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background: rgba(0,0,0,0.20);
+}
+.kpi .label{ color:var(--textDim); font-size:12px; font-weight:800; }
+.kpi .value{ font-weight:1000; letter-spacing:0.3px; }
+.hr{
+  height:1px; width:100%; background:var(--border); margin:16px 0;
+}
+.hero{
+  border:1px solid var(--border);
+  background:
+    radial-gradient(1200px 420px at 20% 0%, rgba(20,241,149,0.18), transparent),
+    radial-gradient(900px 380px at 80% 10%, rgba(153,69,255,0.18), transparent),
+    var(--panel);
+  border-radius:24px;
+  padding:28px;
+}
+.small{ font-size:13px; color:var(--textDim); }
+.h1{ font-size:34px; line-height:1.05; margin:10px 0 0; }
+.h2{ font-size:22px; margin:0; }

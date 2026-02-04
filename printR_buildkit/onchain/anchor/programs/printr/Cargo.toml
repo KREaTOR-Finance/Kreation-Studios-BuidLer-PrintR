@@ -1,0 +1,19 @@
+[package]
+name = "printr"
+version = "0.2.0"
+description = "PrintR program-enforced randomness settlement using Switchboard Solana Randomness Service (SRS)"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "printr"
+
+[features]
+no-entrypoint = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.30.1"
+anchor-spl = "0.30.1"
+solana-randomness-service = { version = "1", features = ["cpi"] }

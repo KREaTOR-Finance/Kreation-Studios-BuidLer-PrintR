@@ -1,0 +1,27 @@
+:root{
+  --bg-midnight:#0B1020;
+  --primary-blue:#3B82F6;
+  --primary-purple:#8B5CF6;
+  --accent-teal:#22D3EE;
+  --state-win:#22C55E;
+  --state-loss:#EF4444;
+  --state-warn:#F59E0B;
+
+  --radius-sm:10px;
+  --radius-md:14px;
+  --radius-lg:18px;
+
+  --shadow-card:0 12px 40px rgba(0,0,0,0.55);
+  --glow-blue:0 0 16px rgba(59,130,246,0.45);
+  --glow-purple:0 0 18px rgba(139,92,246,0.45);
+  --glow-win:0 0 18px rgba(34,197,94,0.55);
+  --glow-loss:0 0 18px rgba(239,68,68,0.45);
+
+  --font-ui: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Space Grotesk", Inter, system-ui, sans-serif;
+
+  --dur-fast:120ms;
+  --dur-base:180ms;
+  --dur-slow:260ms;
+  --ease-out:cubic-bezier(0.2, 0.8, 0.2, 1);
+}
