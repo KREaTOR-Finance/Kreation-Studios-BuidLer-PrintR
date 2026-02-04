@@ -11,7 +11,7 @@ export function SplashScreen({ onComplete, minDisplayMs = 1500 }: SplashScreenPr
   useEffect(() => {
     const timer = setTimeout(() => {
       setFadeOut(true);
-      setTimeout(onComplete, 300); // Wait for fade animation
+      setTimeout(onComplete, 300);
     }, minDisplayMs);
 
     return () => clearTimeout(timer);
@@ -26,7 +26,7 @@ export function SplashScreen({ onComplete, minDisplayMs = 1500 }: SplashScreenPr
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        background: "var(--bg-midnight, #0B1020)",
+        background: "linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%)",
         zIndex: 9999,
         opacity: fadeOut ? 0 : 1,
         transition: "opacity 300ms ease-out",
@@ -35,14 +35,15 @@ export function SplashScreen({ onComplete, minDisplayMs = 1500 }: SplashScreenPr
       {/* Logo */}
       <div
         style={{
-          fontSize: 64,
-          fontFamily: "var(--font-display, 'Space Grotesk', sans-serif)",
+          fontSize: 72,
+          fontFamily: "monospace",
           fontWeight: 900,
-          letterSpacing: 4,
-          background: "linear-gradient(135deg, var(--primary-blue, #3B82F6), var(--primary-purple, #8B5CF6))",
+          letterSpacing: 6,
+          background: "linear-gradient(90deg, #4ECDC4 0%, #7B68EE 100%)",
           WebkitBackgroundClip: "text",
           WebkitTextFillColor: "transparent",
           backgroundClip: "text",
+          textShadow: "0 0 40px rgba(78, 205, 196, 0.3)",
         }}
       >
         PrintR
@@ -51,31 +52,57 @@ export function SplashScreen({ onComplete, minDisplayMs = 1500 }: SplashScreenPr
       {/* Tagline */}
       <div
         style={{
-          marginTop: 12,
+          marginTop: 16,
           fontSize: 14,
-          color: "rgba(255,255,255,0.6)",
-          letterSpacing: 1,
+          color: "rgba(255,255,255,0.5)",
+          letterSpacing: 2,
+          textTransform: "uppercase",
         }}
       >
-        by Kreation Studios
+        Kreation Studios
       </div>
 
-      {/* Loading indicator */}
+      {/* Pixel loading bar */}
       <div
         style={{
-          marginTop: 40,
-          width: 32,
-          height: 32,
-          border: "3px solid rgba(255,255,255,0.1)",
-          borderTopColor: "var(--primary-blue, #3B82F6)",
-          borderRadius: "50%",
-          animation: "spin 1s linear infinite",
+          marginTop: 48,
+          width: 120,
+          height: 8,
+          background: "rgba(255,255,255,0.1)",
+          borderRadius: 4,
+          overflow: "hidden",
         }}
-      />
+      >
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            background: "linear-gradient(90deg, #4ECDC4, #7B68EE, #FF6B9D)",
+            animation: "loading 1.5s ease-in-out infinite",
+            transformOrigin: "left",
+          }}
+        />
+      </div>
+
+      {/* Decorative pixels */}
+      <div style={{ position: "absolute", top: 60, left: 60 }}>
+        <div style={{ width: 8, height: 8, background: "#4ECDC4", opacity: 0.6 }} />
+      </div>
+      <div style={{ position: "absolute", top: 100, right: 80 }}>
+        <div style={{ width: 12, height: 12, background: "#7B68EE", opacity: 0.5 }} />
+      </div>
+      <div style={{ position: "absolute", bottom: 120, left: 100 }}>
+        <div style={{ width: 10, height: 10, background: "#FF6B9D", opacity: 0.7 }} />
+      </div>
+      <div style={{ position: "absolute", bottom: 80, right: 60 }}>
+        <div style={{ width: 8, height: 8, background: "#FFD700", opacity: 0.6 }} />
+      </div>
 
       <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
+        @keyframes loading {
+          0% { transform: scaleX(0); }
+          50% { transform: scaleX(1); }
+          100% { transform: scaleX(0); }
         }
       `}</style>
     </div>
