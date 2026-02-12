@@ -1,99 +1,41 @@
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import Svg, { Circle } from "react-native-svg";
 import { colors } from "../theme/colors";
-import { typography } from "../theme/typography";
 
 interface CountdownRingProps {
-  /** Remaining time in seconds */
-  remaining: number;
-  /** Total time in seconds (for progress calculation) */
-  total: number;
-  /** Size of the ring in pixels */
-  size?: number;
-  /** Stroke width of the ring */
-  strokeWidth?: number;
+  msLeft: number;
 }
 
-export const CountdownRing: React.FC<CountdownRingProps> = ({
-  remaining,
-  total,
-  size = 120,
-  strokeWidth = 4,
-}) => {
-  const r = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * r;
-  const progress = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
-  const strokeDashoffset = circumference * (1 - progress);
-
-  const timeString = useMemo(() => {
-    const clamped = Math.max(0, Math.floor(remaining));
-    const mm = String(Math.floor(clamped / 60)).padStart(2, "0");
-    const ss = String(clamped % 60).padStart(2, "0");
-    return `${mm}:${ss}`;
-  }, [remaining]);
-
-  const isUrgent = remaining <= 10;
+export function CountdownRing({ msLeft }: CountdownRingProps) {
+  const label = useMemo(() => {
+    const totalSec = Math.max(0, Math.floor(msLeft / 1000));
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }, [msLeft]);
 
   return (
-    <View style={[styles.container, { width: size, height: size }]}>
-      <Svg width={size} height={size}>
-        {/* Background track */}
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke={colors.borderDefault}
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
-        {/* Progress arc */}
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke={isUrgent ? colors.stateLoss : colors.primaryBlue}
-          strokeWidth={strokeWidth}
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          rotation={-90}
-          origin={`${size / 2}, ${size / 2}`}
-        />
-      </Svg>
-      <View style={styles.labelContainer}>
-        <Text
-          style={[
-            styles.time,
-            isUrgent && styles.timeUrgent,
-          ]}
-        >
-          {timeString}
-        </Text>
-      </View>
+    <View style={styles.ring}>
+      <Text style={styles.label}>{label}</Text>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
+  ring: {
+    width: 54,
+    height: 54,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "rgba(34,211,238,0.45)",
     alignItems: "center",
     justifyContent: "center",
   },
-  labelContainer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  time: {
-    ...typography.heading,
+  label: {
+    fontWeight: "800",
+    fontSize: 12,
+    letterSpacing: 0.6,
     color: colors.textPrimary,
-    fontSize: 22,
     fontVariant: ["tabular-nums"],
-    letterSpacing: 2,
-  },
-  timeUrgent: {
-    color: colors.stateLoss,
   },
 });

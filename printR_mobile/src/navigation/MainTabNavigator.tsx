@@ -5,8 +5,8 @@ import type { MainTabParamList } from "./types";
 import PlayStackNavigator from "./PlayStackNavigator";
 import ProgressStackNavigator from "./ProgressStackNavigator";
 import StoreScreen from "../screens/StoreScreen";
-import GovernanceScreen from "../screens/GovernanceScreen";
-import ProfileScreen from "../screens/ProfileScreen";
+import { GovernanceScreen } from "../screens/GovernanceScreen";
+import { ProfileScreen } from "../screens/ProfileScreen";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 

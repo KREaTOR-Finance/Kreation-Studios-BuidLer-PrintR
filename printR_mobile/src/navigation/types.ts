@@ -1,6 +1,5 @@
 export type RootStackParamList = {
   MainTabs: undefined;
-  VrfProofModal: { vrf: any };
 };
 
 export type MainTabParamList = {
