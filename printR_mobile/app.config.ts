@@ -28,8 +28,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     "expo-av",
-    "expo-haptics",
-    "expo-crypto",
   ],
   extra: {
     apiBase:

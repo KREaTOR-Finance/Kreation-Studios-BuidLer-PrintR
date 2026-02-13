@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo } from "react";
-import * as Haptics from "expo-haptics";
+import { Platform } from "react-native";
 
 type ImpactStyle = "light" | "medium" | "heavy" | "rigid" | "soft";
 type NotificationType = "success" | "warning" | "error";
@@ -10,41 +10,35 @@ type HapticsAPI = {
   selection: () => void;
 };
 
-const styleMap: Record<ImpactStyle, Haptics.ImpactFeedbackStyle> = {
-  light: Haptics.ImpactFeedbackStyle.Light,
-  medium: Haptics.ImpactFeedbackStyle.Medium,
-  heavy: Haptics.ImpactFeedbackStyle.Heavy,
-  rigid: Haptics.ImpactFeedbackStyle.Heavy,
-  soft: Haptics.ImpactFeedbackStyle.Light,
-};
-
-const notifMap: Record<NotificationType, Haptics.NotificationFeedbackType> = {
-  success: Haptics.NotificationFeedbackType.Success,
-  warning: Haptics.NotificationFeedbackType.Warning,
-  error: Haptics.NotificationFeedbackType.Error,
-};
-
-const Ctx = createContext<HapticsAPI>({
+const noop: HapticsAPI = {
   impact: () => {},
   notification: () => {},
   selection: () => {},
-});
+};
+
+const Ctx = createContext<HapticsAPI>(noop);
 
 export function HapticsProvider({ children }: { children: React.ReactNode }) {
-  const api = useMemo<HapticsAPI>(
-    () => ({
-      impact: (style) => {
-        try { Haptics.impactAsync(styleMap[style]); } catch {}
-      },
-      notification: (type) => {
-        try { Haptics.notificationAsync(notifMap[type]); } catch {}
-      },
-      selection: () => {
-        try { Haptics.selectionAsync(); } catch {}
-      },
-    }),
-    []
-  );
+  const api = useMemo<HapticsAPI>(() => {
+    if (Platform.OS === "web") return noop;
+    // Lazy-require so the native module never loads on web
+    try {
+      const Haptics = require("expo-haptics");
+      return {
+        impact: (style: ImpactStyle) => {
+          try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+        },
+        notification: (type: NotificationType) => {
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        },
+        selection: () => {
+          try { Haptics.selectionAsync(); } catch {}
+        },
+      };
+    } catch {
+      return noop;
+    }
+  }, []);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
