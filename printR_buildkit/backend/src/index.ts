@@ -1,5 +1,7 @@
 import "dotenv/config";
 import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
 import { randomInt, randomUUID } from "node:crypto";
@@ -323,6 +325,11 @@ registerRoundsRoutes(app, { rounds, vrf: vrfProvider, limiter, analytics, receip
 registerPrizesRoutes(app, { prizes, receipts, analytics, limiter });
 registerSessionRoutes(app, { sessions, entitlements });
 
+// Serve mobile web app static files (built by render-build.sh)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.resolve(__dirname, "../public");
+app.use(express.static(publicDir));
+
 app.get("/sessions", (_, res) => {
   res.json(Array.from(sessions.values()).map(s => ({
     id: s.id,
@@ -399,5 +406,10 @@ setInterval(async () => {
     resetSessions();
   }
 }, 5_000);
+
+// SPA catch-all: any non-API, non-static route serves the mobile web app
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
 
 server.listen(PORT, () => console.log(`PrintR backend listening on :${PORT}`));
