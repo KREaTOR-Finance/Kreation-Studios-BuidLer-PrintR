@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { WebView } from "react-native-webview";
+import { View, Text, StyleSheet, Platform } from "react-native";
 
 type TickData = {
   t: number;
@@ -112,10 +111,45 @@ const chartHTML = `
 </html>
 `;
 
-export default function TradingViewLikeChart({ data, height = 260 }: Props) {
-  const webviewRef = useRef<WebView>(null);
+function WebChart({ candles, height }: { candles: CandleData[]; height: number }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const candles = useMemo(() => ticksToCandles(data), [data]);
+  useEffect(() => {
+    if (iframeRef.current?.contentWindow && candles.length > 0) {
+      const json = JSON.stringify(candles);
+      const escaped = json.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      iframeRef.current.contentWindow.postMessage({ type: "updateChart", data: escaped }, "*");
+    }
+  }, [candles]);
+
+  const html = chartHTML.replace(
+    "chart.timeScale().fitContent();\n  </script>",
+    `chart.timeScale().fitContent();
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'updateChart') window.updateChart(e.data.data);
+    });
+  </script>`
+  );
+
+  return (
+    <iframe
+      ref={iframeRef}
+      srcDoc={html}
+      style={{ width: "100%", height, border: "none", backgroundColor: "transparent" }}
+      onLoad={() => {
+        if (iframeRef.current?.contentWindow && candles.length > 0) {
+          const json = JSON.stringify(candles);
+          const escaped = json.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+          iframeRef.current.contentWindow.postMessage({ type: "updateChart", data: escaped }, "*");
+        }
+      }}
+    />
+  );
+}
+
+function NativeChart({ candles, height }: { candles: CandleData[]; height: number }) {
+  const { WebView } = require("react-native-webview");
+  const webviewRef = useRef<any>(null);
 
   useEffect(() => {
     if (webviewRef.current && candles.length > 0) {
@@ -128,24 +162,36 @@ export default function TradingViewLikeChart({ data, height = 260 }: Props) {
   }, [candles]);
 
   return (
+    <WebView
+      ref={webviewRef}
+      source={{ html: chartHTML }}
+      scrollEnabled={false}
+      style={{ backgroundColor: "transparent" }}
+      originWhitelist={["*"]}
+      javaScriptEnabled={true}
+      onLoadEnd={() => {
+        if (candles.length > 0) {
+          const json = JSON.stringify(candles);
+          const escaped = json.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+          webviewRef.current?.injectJavaScript(
+            `window.updateChart('${escaped}'); true;`
+          );
+        }
+      }}
+    />
+  );
+}
+
+export default function TradingViewLikeChart({ data, height = 260 }: Props) {
+  const candles = useMemo(() => ticksToCandles(data), [data]);
+
+  return (
     <View style={[styles.container, { height }]}>
-      <WebView
-        ref={webviewRef}
-        source={{ html: chartHTML }}
-        scrollEnabled={false}
-        style={{ backgroundColor: "transparent" }}
-        originWhitelist={["*"]}
-        javaScriptEnabled={true}
-        onLoadEnd={() => {
-          if (candles.length > 0) {
-            const json = JSON.stringify(candles);
-            const escaped = json.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-            webviewRef.current?.injectJavaScript(
-              `window.updateChart('${escaped}'); true;`
-            );
-          }
-        }}
-      />
+      {Platform.OS === "web" ? (
+        <WebChart candles={candles} height={height} />
+      ) : (
+        <NativeChart candles={candles} height={height} />
+      )}
       <Text style={styles.watermark}>BP</Text>
     </View>
   );

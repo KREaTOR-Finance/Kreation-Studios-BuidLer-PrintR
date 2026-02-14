@@ -1,20 +1,26 @@
 import React, { createContext, useContext, useEffect, useRef, useMemo } from "react";
-import { Audio } from "expo-av";
+import { Platform } from "react-native";
 
 type SoundName = "tap" | "start" | "win" | "miss";
 type SoundAPI = { play: (name: SoundName) => void };
 
 const Ctx = createContext<SoundAPI>({ play: () => {} });
 
-const soundFiles: Record<SoundName, any> = {
-  tap: require("../../assets/sfx/tap.mp3"),
-  start: require("../../assets/sfx/start.mp3"),
-  win: require("../../assets/sfx/win.mp3"),
-  miss: require("../../assets/sfx/miss.mp3"),
-};
+const noop: SoundAPI = { play: () => {} };
 
 export function SoundProvider({ children }: { children: React.ReactNode }) {
-  const soundsRef = useRef<Map<SoundName, Audio.Sound>>(new Map());
+  if (Platform.OS === "web") return <Ctx.Provider value={noop}>{children}</Ctx.Provider>;
+
+  const { Audio } = require("expo-av") as typeof import("expo-av");
+
+  const soundFiles: Record<SoundName, any> = {
+    tap: require("../../assets/sfx/tap.mp3"),
+    start: require("../../assets/sfx/start.mp3"),
+    win: require("../../assets/sfx/win.mp3"),
+    miss: require("../../assets/sfx/miss.mp3"),
+  };
+
+  const soundsRef = useRef<Map<SoundName, InstanceType<typeof Audio.Sound>>>(new Map());
 
   useEffect(() => {
     const loadAll = async () => {
