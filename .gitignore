@@ -4,6 +4,10 @@ node_modules/
 # Build outputs
 dist/
 public/
+
+# Keep backend build + web assets
+!printR_buildkit/backend/dist/
+!printR_buildkit/backend/public/
 *.tsbuildinfo
 
 # Environment files with secrets
