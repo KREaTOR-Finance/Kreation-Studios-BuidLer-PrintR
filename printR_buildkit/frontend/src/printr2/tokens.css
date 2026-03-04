@@ -1,0 +1,33 @@
+:root{
+  --p2-bg0:#050B0D;
+  --p2-bg1:#081417;
+  --p2-ink:#EAF2FF;
+  --p2-ink2:rgba(234,242,255,.75);
+  --p2-ink3:rgba(234,242,255,.55);
+
+  --p2-accent:#82FFD6;
+  --p2-accentInk:#03110B;
+  --p2-warn:#FFCC66;
+  --p2-dead:rgba(255,255,255,.18);
+
+  --p2-r12:12px;
+  --p2-r16:16px;
+  --p2-r18:18px;
+  --p2-r22:22px;
+
+  --p2-e1: 0 12px 40px rgba(0,0,0,.45);
+  --p2-e2: 0 0 0 1px rgba(255,255,255,.10) inset;
+
+  --p2-d1: 120ms;
+  --p2-d2: 180ms;
+  --p2-d3: 240ms;
+}
+
+@keyframes p2-fadeIn{ from{ opacity:0 } to{ opacity:1 } }
+@keyframes p2-sheetUp{ from{ transform: translateY(10px) scale(0.98); opacity:0 } to{ transform: translateY(0) scale(1); opacity:1 } }
+@keyframes p2-livePulse{ 0%,100%{ box-shadow: 0 0 0 rgba(130,255,214,0) } 50%{ box-shadow: 0 0 22px rgba(130,255,214,.16) } }
+@keyframes p2-warnPulse{ 0%,100%{ filter: brightness(1) } 50%{ filter: brightness(1.08) } }
+
+@media (prefers-reduced-motion: reduce){
+  *{ animation: none !important; transition: none !important; }
+}

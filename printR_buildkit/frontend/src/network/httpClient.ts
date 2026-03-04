@@ -1,10 +1,16 @@
 const ENV_BASE = ((import.meta as any).env?.VITE_API_BASE ?? "").trim() || undefined;
-const FALLBACK_BASE =
-  typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:3001"
-    : "http://localhost:8080";
 
-export const API_BASE = ENV_BASE ?? FALLBACK_BASE;
+function defaultBase(): string {
+  if (typeof window === "undefined") return "http://localhost:3001";
+  const host = window.location.hostname;
+  // In dev, backend runs on :3001 on the same LAN host.
+  // This makes mobile testing work (e.g. http://192.168.x.x:5173 -> http://192.168.x.x:3001).
+  return `http://${host}:3001`;
+}
+
+export const API_BASE = ENV_BASE ?? defaultBase();
+
+import { getStoredWalletPubkey } from "../printr2/wallet/WalletGate";
 
 export type PlayerHeaders = {
   playerRef: string; // e.g. tg:123
@@ -12,11 +18,13 @@ export type PlayerHeaders = {
 };
 
 export async function apiGet<T>(path: string, headers: PlayerHeaders): Promise<T> {
+  const stored = getStoredWalletPubkey();
+  const wallet = headers.walletPubkey ?? stored;
   const res = await fetch(`${API_BASE}${path}`, {
     method: "GET",
     headers: {
       "x-printr-player": headers.playerRef,
-      ...(headers.walletPubkey ? { "x-printr-wallet": headers.walletPubkey } : {})
+      ...(wallet ? { "x-printr-wallet": wallet } : {})
     }
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -24,12 +32,14 @@ export async function apiGet<T>(path: string, headers: PlayerHeaders): Promise<T
 }
 
 export async function apiPost<T>(path: string, body: any, headers: PlayerHeaders, extra?: Record<string,string>): Promise<T> {
+  const stored = getStoredWalletPubkey();
+  const wallet = headers.walletPubkey ?? stored;
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-printr-player": headers.playerRef,
-      ...(headers.walletPubkey ? { "x-printr-wallet": headers.walletPubkey } : {}),
+      ...(wallet ? { "x-printr-wallet": wallet } : {}),
       ...(extra ?? {})
     },
     body: JSON.stringify(body ?? {})

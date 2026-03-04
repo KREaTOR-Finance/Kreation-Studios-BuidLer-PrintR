@@ -10,6 +10,7 @@ import { WsHub } from "./server/ws.js";
 import { DevVrfProvider } from "./vrf/devProvider.js";
 import { SwitchboardSrsProvider } from "./vrf/switchboardSrsProvider.js";
 import { SessionSeedSwitchboardProvider } from "./vrf/sessionSeedSwitchboardProvider.js";
+import { SafeVrfProvider } from "./vrf/safeProvider.js";
 import { VrfQueue } from "./vrf/queue.js";
 import { createSession, stepTick } from "./engine/sessionEngine.js";
 import type { SessionRuntime } from "./engine/models.js";
@@ -120,8 +121,11 @@ const baseSwitchboard = useSwitchboard
 // Session-level provider: 1x Switchboard randomness per session; per-tick z derived via hash.
 const sessionVrf = baseSwitchboard ? new SessionSeedSwitchboardProvider(baseSwitchboard) : null;
 
-// Engine expects a per-tick provider; if Switchboard enabled, wrap per-session; else dev provider.
-const vrfProvider = sessionVrf ?? new DevVrfProvider(1337);
+// Engine expects a per-tick provider. Always keep a dev fallback so ticks never crash.
+const devFallback = new DevVrfProvider(1337);
+const vrfProvider = sessionVrf
+  ? new SafeVrfProvider(sessionVrf, devFallback, (e) => console.warn("VRF_ERROR", String((e as any)?.message ?? e)))
+  : devFallback;
 const vrfQueue = new VrfQueue(vrfProvider);
 
 // In-memory sessions + player state (MVP)

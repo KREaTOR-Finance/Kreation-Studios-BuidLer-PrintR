@@ -35,30 +35,50 @@ function fallbackUuid(): string {
 export class WsClient {
   private ws: WebSocket | null = null;
   private handlers: Array<(ev: ServerEvent) => void> = [];
+  private statusHandlers: Array<(s: { state: "connecting" | "open" | "closed" | "error"; error?: any }) => void> = [];
   private pending: string[] = [];
 
   connect(url: string) {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
+    this.statusHandlers.forEach(h => h({ state: "connecting" }));
+
     const socket = new WebSocket(url);
     this.ws = socket;
+
     socket.onopen = () => {
       if (this.ws !== socket) return;
+      this.statusHandlers.forEach(h => h({ state: "open" }));
       const queued = this.pending.slice();
       this.pending = [];
       queued.forEach((msg) => {
         if (socket.readyState === WebSocket.OPEN) socket.send(msg);
       });
     };
+
+    socket.onerror = (err) => {
+      if (this.ws !== socket) return;
+      this.statusHandlers.forEach(h => h({ state: "error", error: err }));
+    };
+
     socket.onmessage = (m) => {
       try {
         const ev = JSON.parse(String(m.data)) as ServerEvent;
         this.handlers.forEach(h => h(ev));
       } catch {}
     };
+
     socket.onclose = () => {
       if (this.ws === socket) this.ws = null;
+      this.statusHandlers.forEach(h => h({ state: "closed" }));
+    };
+  }
+
+  onStatus(cb: (s: { state: "connecting" | "open" | "closed" | "error"; error?: any }) => void) {
+    this.statusHandlers.push(cb);
+    return () => {
+      this.statusHandlers = this.statusHandlers.filter(h => h !== cb);
     };
   }
 

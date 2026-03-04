@@ -1,0 +1,75 @@
+/* Frame */
+.p2-frame{ max-width: 560px; margin: 0 auto; padding: 18px 16px 24px; position:relative; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+
+/* Top bar */
+.p2-top{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding: 6px 2px 10px; }
+.p2-topCenter{ display:flex; align-items:center; gap:10px; flex-wrap: wrap; justify-content:center; }
+.p2-timer{ font-weight: 900; letter-spacing: .08em; color: var(--p2-ink2); }
+
+.p2-mark{ display:flex; align-items:center; gap:10px; }
+.p2-markDot{ width:10px; height:10px; border-radius:999px; background:var(--p2-accent); box-shadow: 0 0 18px rgba(130,255,214,.55); }
+.p2-markText{ letter-spacing:.14em; font-weight:700; text-transform:uppercase; font-size:12px; opacity:.92; }
+
+/* Landing */
+.p2-hero{ padding: 34px 4px 10px; }
+.p2-headline{ font-weight: 900; letter-spacing: .02em; }
+.p2-headlineLine{ font-size: 44px; line-height: .92; }
+.p2-ctaRow{ margin-top: 18px; display:flex; gap: 10px; }
+.p2-footnote{ margin-top: 14px; font-size: 12px; color: var(--p2-ink3); }
+
+/* Lobby */
+.p2-lobby{ padding-top: 8px; }
+.p2-grid{ display:grid; grid-template-columns: 1fr; gap: 12px; }
+.p2-card{ text-align:left; padding: 12px 12px; }
+.p2-cardTop{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.p2-cardTitle{ font-weight: 900; letter-spacing: .06em; text-transform: uppercase; font-size: 12px; opacity: .95; }
+.p2-cardMid{ display:flex; gap: 12px; margin-top: 8px; }
+.p2-metric{ flex:1; }
+.p2-metricLabel{ font-size: 10px; letter-spacing:.18em; color: var(--p2-ink3); font-weight: 900; }
+.p2-metricValue{ font-size: 20px; font-weight: 900; margin-top: 3px; }
+.p2-cardBottom{ display:flex; justify-content:space-between; margin-top: 10px; gap:10px; }
+
+/* Game */
+.p2-gameFrame{ padding-bottom: calc(18px + 140px + env(safe-area-inset-bottom)); }
+.p2-gameHud{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 6px; }
+.p2-hudItem{ background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09); border-radius: 16px; padding: 10px; }
+.p2-hudLabel{ font-size: 10px; letter-spacing:.18em; color: var(--p2-ink3); font-weight: 900; }
+.p2-hudValue{ font-size: 16px; font-weight: 900; margin-top: 4px; }
+
+.p2-fxToast{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(130,255,214,.08);
+  border: 1px solid rgba(130,255,214,.22);
+  color: rgba(234,242,255,.92);
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.p2-chartWrap{ margin-top: 10px; background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.10); border-radius: 18px; overflow:hidden; }
+.p2-chart{ height: 46vh; min-height: 320px; }
+
+.p2-pad{ margin-top: 12px; padding: 12px; position: fixed; left: 50%; transform: translateX(-50%); width: calc(min(560px, 100%) - 32px); bottom: calc(12px + env(safe-area-inset-bottom)); backdrop-filter: blur(10px); box-shadow: 0 16px 50px rgba(0,0,0,.55); }
+.p2-padRow{ display:flex; gap: 10px; margin-top: 10px; }
+.p2-padRow:first-child{ margin-top: 0; }
+
+.p2-commit{ flex:1; }
+.p2-commitTop{ display:flex; align-items:baseline; justify-content:space-between; }
+.p2-commitValue{ font-size: 22px; font-weight: 950; }
+.p2-commitRow{ display:flex; gap: 8px; margin-top: 8px; }
+.p2-chip{ flex:1; padding: 10px 0; border-radius: 14px; font-weight: 900; letter-spacing:.08em; font-size: 12px; }
+.p2-chipOn{ background: rgba(130,255,214,.18); border: 1px solid rgba(130,255,214,.42); color: var(--p2-accent); }
+.p2-chipOff{ background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); color: var(--p2-ink2); }
+
+.p2-big{ width:100%; padding: 18px 18px; min-height: 56px; }
+
+@media (max-width: 420px){
+  .p2-headlineLine{ font-size: 38px; }
+  .p2-gameHud{ grid-template-columns: repeat(2, 1fr); }
+  .p2-chart{ height: 42vh; min-height: 280px; }
+  .p2-cardMid{ gap: 10px; }
+  .p2-metricValue{ font-size: 18px; }
+}
