@@ -12,6 +12,12 @@ public/
 !.env.example
 !.env.local.example
 
+# Local secret material (dev wallets, etc.)
+.secrets/
+printR_buildkit/backend/.secrets/
+printR_buildkit/frontend/.secrets/
+printR_mobile/.secrets/
+
 # IDE
 .idea/
 .vscode/

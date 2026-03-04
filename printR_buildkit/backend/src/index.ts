@@ -9,6 +9,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { WsHub } from "./server/ws.js";
 import { DevVrfProvider } from "./vrf/devProvider.js";
 import { SwitchboardSrsProvider } from "./vrf/switchboardSrsProvider.js";
+import { SessionSeedSwitchboardProvider } from "./vrf/sessionSeedSwitchboardProvider.js";
 import { VrfQueue } from "./vrf/queue.js";
 import { createSession, stepTick } from "./engine/sessionEngine.js";
 import type { SessionRuntime } from "./engine/models.js";
@@ -39,6 +40,7 @@ import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerRoundsRoutes } from "./routes/rounds.js";
 import { registerPrizesRoutes } from "./routes/prizes.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerProofRoutes } from "./routes/proof.js";
 import { InMemoryEntitlementsStore } from "./sessions/entitlementsStore.js";
 
 
@@ -101,16 +103,25 @@ const server = http.createServer(app);
 // VRF provider selection:
 // - DevVrfProvider for local testing
 // - SwitchboardSrsProvider for Trust-first MVP / production
-const vrfProvider = process.env.USE_SWITCHBOARD_VRF === "true"
+const useSwitchboard = process.env.USE_SWITCHBOARD_VRF === "true";
+
+// Base provider: can perform a real on-demand randomness request.
+const baseSwitchboard = useSwitchboard
   ? new SwitchboardSrsProvider({
-      rpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com",
+      rpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
       commitment: process.env.SOLANA_COMMITMENT ?? "confirmed",
       payerSecretKeyBase58: process.env.SOLANA_PAYER_SECRETKEY_BASE58,
-      payerKeypairPath: process.env.SOLANA_PAYER_KEYPAIR_PATH,
+      payerKeypairPath: process.env.SOLANA_PAYER_KEYPAIR_PATH ?? process.env.PRINTR_KEYPAIR_PATH,
       queuePubkey: process.env.SWITCHBOARD_QUEUE_PUBKEY,
       explorerCluster: process.env.SOLANA_EXPLORER_CLUSTER
     })
-  : new DevVrfProvider(1337);
+  : null;
+
+// Session-level provider: 1x Switchboard randomness per session; per-tick z derived via hash.
+const sessionVrf = baseSwitchboard ? new SessionSeedSwitchboardProvider(baseSwitchboard) : null;
+
+// Engine expects a per-tick provider; if Switchboard enabled, wrap per-session; else dev provider.
+const vrfProvider = sessionVrf ?? new DevVrfProvider(1337);
 const vrfQueue = new VrfQueue(vrfProvider);
 
 // In-memory sessions + player state (MVP)
@@ -324,6 +335,7 @@ registerPaymentsRoutes(app, analytics);
 registerRoundsRoutes(app, { rounds, vrf: vrfProvider, limiter, analytics, receipts });
 registerPrizesRoutes(app, { prizes, receipts, analytics, limiter });
 registerSessionRoutes(app, { sessions, entitlements });
+registerProofRoutes(app, { sessions, sessionVrf });
 
 // Serve mobile web app static files (built by render-build.sh)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

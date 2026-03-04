@@ -37,6 +37,7 @@ export function createSession(args: CreateSessionArgs): SessionRuntime {
     endTimeMs: now + duration,
     tickIndex: 0,
     price: args.initialPrice,
+    // Keep a small in-memory history for UI sparklines/debug; do not persist as a "tape".
     tickHistory: [{ tickIndex: 0, price: args.initialPrice }],
     activePlayers: 0,
     positions: []
@@ -75,13 +76,17 @@ export async function stepTick(session: SessionRuntime, deps: EngineDeps): Promi
     return p;
   });
 
+  const nextHistory = [...session.tickHistory, { tickIndex: nextTickIndex, price }];
+  const MAX_HISTORY = 64;
+  const tickHistory = nextHistory.length > MAX_HISTORY ? nextHistory.slice(-MAX_HISTORY) : nextHistory;
+
   const next: SessionRuntime = {
     ...session,
     phase,
     tickIndex: nextTickIndex,
     price,
     positions,
-    tickHistory: [...session.tickHistory, { tickIndex: nextTickIndex, price }]
+    tickHistory
   };
 
   deps.onBroadcast?.({

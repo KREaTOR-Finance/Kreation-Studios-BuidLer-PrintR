@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "node scripts/smoke-test.mjs",
-    "seed:credits": "node scripts/seed-credits.mjs"
+    "seed:credits": "node scripts/seed-credits.mjs",
+    "keypair:gen:devnet": "node scripts/gen-devnet-keypair.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",

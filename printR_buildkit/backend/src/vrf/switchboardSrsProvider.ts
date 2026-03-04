@@ -22,6 +22,7 @@ import { bytesToHex, bytesToSignedUnit, coerceBytes } from "./bytes.js";
 export class SwitchboardSrsProvider implements VrfProvider {
   private connection: Connection;
   private payer: Keypair;
+  private payerReady: Promise<void>;
   private commitment: string;
   private queueOverride?: string;
   private explorerCluster?: string;
@@ -45,19 +46,22 @@ export class SwitchboardSrsProvider implements VrfProvider {
   }) {
     this.commitment = opts.commitment ?? "confirmed";
     this.connection = new Connection(opts.rpcUrl, this.commitment as any);
-    this.payer = this.loadPayer(opts);
+    // init payer asynchronously (ESM-safe)
+    this.payer = Keypair.generate();
+    this.payerReady = this.loadPayer(opts).then(kp => { this.payer = kp; }).then(() => void 0);
+
     this.queueOverride = opts.queuePubkey;
     this.explorerCluster = opts.explorerCluster;
   }
 
-  private loadPayer(opts: { payerSecretKeyBase58?: string; payerKeypairPath?: string }): Keypair {
+  private async loadPayer(opts: { payerSecretKeyBase58?: string; payerKeypairPath?: string }): Promise<Keypair> {
     if (opts.payerSecretKeyBase58 && opts.payerSecretKeyBase58.trim().length > 0) {
       const bytes = bs58.decode(opts.payerSecretKeyBase58.trim());
       return Keypair.fromSecretKey(bytes);
     }
     if (opts.payerKeypairPath && opts.payerKeypairPath.trim().length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const fs = require("node:fs");
+      // ESM-friendly file read
+      const fs = await import("node:fs");
       const raw = JSON.parse(fs.readFileSync(opts.payerKeypairPath.trim(), "utf8"));
       return Keypair.fromSecretKey(Uint8Array.from(raw));
     }
@@ -72,6 +76,7 @@ export class SwitchboardSrsProvider implements VrfProvider {
    * - (optionally) persist in DB keyed by sessionId
    */
   private async ensureRandomnessAccount(sessionId: string): Promise<PublicKey> {
+    await this.payerReady;
     const existing = this.randomnessAccounts.get(sessionId);
     if (existing) return existing;
 
@@ -95,6 +100,7 @@ export class SwitchboardSrsProvider implements VrfProvider {
    * Returns a requestId immediately.
    */
   async requestSample(sessionId: string, tickIndex: number): Promise<{ requestId: string }> {
+    await this.payerReady;
     const requestId = `${sessionId}:${tickIndex}`;
     const p = this.commitRevealRead(sessionId, tickIndex, requestId);
     this.inflight.set(requestId, p);
