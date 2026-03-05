@@ -9,8 +9,11 @@ import "./tokens.css";
 import "./ui.css";
 import "./screens.css";
 
-import { backendWsUrl } from "./net";
+import { backendWsUrl, backendHttpBase } from "./net";
 import { Button, Panel, Pill, Toggle, NotchSlider } from "./ui";
+import { TapeChart } from "./ui/TapeChart";
+import { ConnectButton } from "./wallet/ConnectButton";
+import { ShareSheet } from "./share/ShareSheet";
 
 type TickEvent = { type: "TICK"; sessionId: string; tickIndex: number; price: number; phase: string; timeRemainingMs: number; closingRemainingMs: number };
 type SessionState = { type: "SESSION_STATE"; sessionId: string; phase: string; tickIndex: number; price: number; timeRemainingMs: number; closingRemainingMs: number; history?: Array<{ tickIndex: number; price: number }> };
@@ -21,11 +24,12 @@ export function PrintrGame(){
   const { sessionId } = useParams();
   const sid = String(sessionId ?? "");
 
-  const [phase, setPhase] = useState("LIVE");
+  const [phase, setPhase] = useState<"LIVE"|"CLOSING"|"ENDED">("LIVE");
   const [price, setPrice] = useState<number>(0);
   const [tickIndex, setTickIndex] = useState<number>(0);
   const [timeRemainingMs, setTimeRemainingMs] = useState<number>(0);
-  const [markers, setMarkers] = useState<number>(0);
+  const [commitsRemaining, setCommitsRemaining] = useState<number>(0);
+  const isSpectating = commitsRemaining <= 0;
   const [score, setScore] = useState<number>(0);
   const [hasOpen, setHasOpen] = useState<boolean>(false);
   const [commit, setCommit] = useState(250);
@@ -36,10 +40,25 @@ export function PrintrGame(){
   const [closeFx, setCloseFx] = useState(0);
   const [tickFx, setTickFx] = useState(0);
   const [lastFx, setLastFx] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [padTab, setPadTab] = useState<"TRADE"|"HISTORY">("TRADE");
+
+  const [posHistory, setPosHistory] = useState<Array<{
+    id: string;
+    side: "LONG" | "SHORT";
+    lev: number;
+    commit: number;
+    entryPrice: number;
+    entryTick: number;
+    exitPrice?: number;
+    exitTick?: number;
+  }>>([]);
 
   const timeText = useMemo(() => fmtTime(timeRemainingMs), [timeRemainingMs]);
 
   const { ws, connectivity, playerId } = useSessionWs(sid);
+
+  // No HTTP fallback: WS should always be available to backend.
 
   useEffect(() => {
     if (!sid) return;
@@ -51,7 +70,7 @@ export function PrintrGame(){
 
       if (ev.type === "SESSION_STATE") {
         const s = ev as any as SessionState;
-        setPhase(s.phase);
+        setPhase((s.phase as any) ?? "LIVE");
         setPrice(s.price);
         setTickIndex(s.tickIndex);
         setTimeRemainingMs(s.timeRemainingMs);
@@ -60,7 +79,7 @@ export function PrintrGame(){
 
       if (ev.type === "TICK") {
         const t = ev as any as TickEvent;
-        setPhase(t.phase);
+        setPhase((t.phase as any) ?? phase);
         setPrice(t.price);
         setTickIndex(t.tickIndex);
         setTimeRemainingMs(t.timeRemainingMs);
@@ -70,7 +89,7 @@ export function PrintrGame(){
 
       if (ev.type === "PLAYER_HUD") {
         const h = ev as any as PlayerHud;
-        setMarkers((h as any).markersRemaining ?? 0);
+        setCommitsRemaining((h as any).commitsRemaining ?? (h as any).markersRemaining ?? 0);
         setScore((h as any).scoreDisplay ?? 0);
         setHasOpen(!!(h as any).hasOpen);
       }
@@ -85,85 +104,39 @@ export function PrintrGame(){
     });
   }, [sid, ws]);
 
-  // --- Chart ---
-  const [chartEl, setChartEl] = useState<HTMLDivElement | null>(null);
-  const chartRef = React.useRef<any>(null);
-  const seriesRef = React.useRef<any>(null);
-  const dataRef = React.useRef<Array<{ time: number; value: number }>>([]);
-
-  useEffect(() => {
-    if (!chartEl) return;
-
-    const chart = createChart(chartEl, {
-      layout: {
-        background: { color: "rgba(0,0,0,0)" },
-        textColor: "rgba(230,240,255,0.8)",
-        fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto"
-      },
-      grid: {
-        vertLines: { color: "rgba(255,255,255,0.05)" },
-        horzLines: { color: "rgba(255,255,255,0.05)" }
-      },
-      rightPriceScale: {
-        borderVisible: false
-      },
-      timeScale: {
-        borderVisible: false,
-        timeVisible: true,
-        secondsVisible: true
-      },
-      crosshair: {
-        vertLine: { color: "rgba(130,255,214,0.18)" },
-        horzLine: { color: "rgba(130,255,214,0.18)" }
-      }
-    });
-
-    const series = chart.addAreaSeries({
-      lineColor: "rgba(130,255,214,0.95)",
-      topColor: "rgba(130,255,214,0.28)",
-      bottomColor: "rgba(130,255,214,0.02)",
-      lineWidth: 2
-    });
-
-    chartRef.current = chart;
-    seriesRef.current = series;
-
-    const ro = new ResizeObserver(() => {
-      chart.applyOptions({ width: chartEl.clientWidth, height: chartEl.clientHeight });
-      chart.timeScale().fitContent();
-    });
-    ro.observe(chartEl);
-
-    return () => {
-      ro.disconnect();
-      chart.remove();
-    };
-  }, [chartEl]);
+  // --- Tape ---
+  const [tapePrices, setTapePrices] = useState<number[]>([]);
 
   function seedChart(history: Array<{ tickIndex: number; price: number }>) {
-    const series = seriesRef.current;
-    if (!series) return;
-    const base = Math.floor(Date.now() / 1000) - history.length * 5;
-    const data = history.map((p, i) => ({ time: base + i * 5, value: p.price }));
-    dataRef.current = data;
-    series.setData(data);
-    chartRef.current?.timeScale()?.fitContent?.();
+    setTapePrices(history.map((p) => Number(p.price ?? 0)).slice(-180));
   }
 
   function pushPoint(p: { tickIndex: number; price: number }) {
-    const series = seriesRef.current;
-    if (!series) return;
-
-    const last = dataRef.current[dataRef.current.length - 1];
-    const t = last ? last.time + 5 : Math.floor(Date.now() / 1000);
-    const point = { time: t, value: p.price };
-    dataRef.current = [...dataRef.current.slice(-180), point];
-    series.update(point);
+    setTapePrices((cur) => [...cur.slice(-179), Number(p.price ?? 0)]);
   }
 
   const sendIntent = (intent: "OPEN" | "CLOSE") => {
     if (intent === "OPEN") setCommitFx((x) => x + 1);
     if (intent === "CLOSE") setCloseFx((x) => x + 1);
+
+    // Local history (client-side). Server can be added later.
+    if (intent === "OPEN") {
+      const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      setPosHistory((h) => [{ id, side: dir, lev, commit, entryPrice: price, entryTick: tickIndex }, ...h].slice(0, 30));
+      setPadTab("TRADE");
+    }
+    if (intent === "CLOSE") {
+      setPosHistory((h) => {
+        const next = [...h];
+        const open = next.find((x) => x.exitTick == null);
+        if (open) {
+          open.exitPrice = price;
+          open.exitTick = tickIndex;
+        }
+        return next;
+      });
+      setPadTab("HISTORY");
+    }
 
     // Prefer the persistent session WS.
     const client = ws.current;
@@ -204,14 +177,28 @@ export function PrintrGame(){
         <header className="p2-top">
           <Button variant="ghost" onClick={()=>nav("/play")}>Exit</Button>
           <div className="p2-topCenter">
-            {connectivity !== "open" ? <div className="p2-mini">{connectivity}…</div> : null}
+            {connectivity !== "open" ? <div className="p2-mini" style={{ color: "rgba(255,120,120,.95)" }}>WS {connectivity}</div> : <div className="p2-mini">WS OPEN</div>}
             <Pill tone={phase === "CLOSING" ? "warn" : "live"}>{phase}</Pill>
             <div className="p2-timer">{timeText}</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <Button variant="ghost" onClick={()=>setShareOpen(true)}>Share</Button>
             <Button variant="ghost" onClick={()=>setShowProof(true)}>Proof</Button>
           </div>
         </header>
+
+        {phase === "CLOSING" ? (
+          <div className="p2-fxToast" style={{ background: "rgba(255,204,102,.08)", borderColor: "rgba(255,204,102,.22)" }}>
+            CLOSING: commits locked. Close clean.
+          </div>
+        ) : isSpectating ? (
+          <div className="p2-fxToast" style={{ background: "rgba(255,255,255,.06)", borderColor: "rgba(255,255,255,.14)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div>SPECTATING • buy credits to commit</div>
+              <Button variant="secondary" onClick={() => nav("/store")}>Store</Button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="p2-gameHud">
           <div className="p2-hudItem">
@@ -219,8 +206,8 @@ export function PrintrGame(){
             <div className="p2-hudValue">{Math.round(score)}</div>
           </div>
           <div className="p2-hudItem">
-            <div className="p2-hudLabel">MARKERS</div>
-            <div className="p2-hudValue">{markers}</div>
+            <div className="p2-hudLabel">COMMITS</div>
+            <div className="p2-hudValue">{commitsRemaining}</div>
           </div>
           <div className="p2-hudItem">
             <div className="p2-hudLabel">PRICE</div>
@@ -234,26 +221,48 @@ export function PrintrGame(){
 
         {lastFx ? <div className="p2-fxToast">{lastFx.split("_").join(" ")}</div> : null}
 
-        <div key={tickFx} className={`p2-chartWrap ${tickFx ? "p2-chartBloom" : ""}`}>
-          <div className="p2-chart" ref={setChartEl} />
+        <div className={["p2-chartWrap", tickFx ? "p2-chartBloom" : ""].join(" ")}>
+          <div className="p2-chart">
+            <TapeChart
+              prices={tapePrices}
+              tickMs={5000}
+              markers={posHistory.map((p, idx) => ({
+                kind: p.exitTick != null ? "CLOSE" : "OPEN",
+                side: p.side,
+                // best-effort marker placement near the most recent points
+                idx: Math.max(0, tapePrices.length - 1 - idx * 6)
+              }))}
+            />
+          </div>
         </div>
 
         {/* Spacer so the fixed trade pad never covers the chart */}
         <div style={{ height: 160 }} />
 
-        <Panel key={closeFx} className={`p2-pad p2-padFx ${closeFx ? "p2-snapGo" : ""}`}>
-          <div className="p2-padRow">
-            <Toggle
-              options={[{ key: "LONG", label: "LONG" }, { key: "SHORT", label: "SHORT" }]}
-              value={dir}
-              onChange={(v) => setDir(v as any)}
-            />
-            <Toggle
-              options={[1, 2, 3, 4, 5].map((n) => ({ key: String(n), label: `${n}x` }))}
-              value={String(lev)}
-              onChange={(v) => setLev(Number(v))}
-            />
+        <Panel
+          key={`close-${closeFx}`}
+          className={`p2-pad p2-padFx ${closeFx ? "p2-snapGo" : ""}`}
+          style={{ maxHeight: "44vh", overflow: "auto" }}
+        >
+          <div className="p2-padTabs">
+            <button type="button" className={padTab === "TRADE" ? "p2-tab p2-tabOn" : "p2-tab"} onClick={() => setPadTab("TRADE")}>TRADE</button>
+            <button type="button" className={padTab === "HISTORY" ? "p2-tab p2-tabOn" : "p2-tab"} onClick={() => setPadTab("HISTORY")}>HISTORY</button>
           </div>
+
+          {padTab === "TRADE" ? (
+            <>
+              <div className="p2-padRow">
+                <Toggle
+                  options={[{ key: "LONG", label: "LONG" }, { key: "SHORT", label: "SHORT" }]}
+                  value={dir}
+                  onChange={(v) => setDir(v as any)}
+                />
+                <Toggle
+                  options={[1, 3, 5].map((n) => ({ key: String(n), label: `${n}x` }))}
+                  value={String(lev)}
+                  onChange={(v) => setLev(Number(v))}
+                />
+              </div>
 
           <div className="p2-padRow">
             <NotchSlider label="COMMIT" value={commit} notches={[100, 250, 500, 750, 1000]} onChange={setCommit} />
@@ -261,17 +270,62 @@ export function PrintrGame(){
 
           <div className="p2-padRow">
             {!hasOpen ? (
-              <Button className="p2-big" onClick={()=>sendIntent("OPEN")}>COMMIT</Button>
+              <Button
+                className="p2-big"
+                variant={phase === "CLOSING" ? "secondary" : "primary"}
+                onClick={() => {
+                  if (phase === "CLOSING") {
+                    setLastFx("COMMIT_LOCKED");
+                    setTimeout(() => setLastFx((cur) => (cur === "COMMIT_LOCKED" ? null : cur)), 900);
+                    return;
+                  }
+                  sendIntent("OPEN");
+                }}
+              >
+                COMMIT
+              </Button>
             ) : (
               <Button className="p2-big" onClick={()=>sendIntent("CLOSE")}>CLOSE</Button>
             )}
           </div>
           {/* Sonar pulse on commit */}
-          <div key={commitFx} className={`p2-sonar ${commitFx ? "p2-sonarGo" : ""}`} />
+          <div key={`commit-${commitFx}`} className={`p2-sonar ${commitFx ? "p2-sonarGo" : ""}`} />
+            </>
+          ) : (
+            <div style={{ display: "grid", gap: 8 }}>
+              {posHistory.length === 0 ? (
+                <div className="p2-mini" style={{ opacity: 0.8 }}>No positions yet.</div>
+              ) : (
+                posHistory.map((p) => {
+                  const pnl = (p.exitPrice != null)
+                    ? ((p.side === "LONG" ? (p.exitPrice - p.entryPrice) : (p.entryPrice - p.exitPrice)) * p.lev)
+                    : null;
+                  return (
+                    <div key={p.id} className="p2-row" style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 900, letterSpacing: 0.6 }}>{p.side} {p.lev}x • {p.commit}</div>
+                        <div className="p2-mini" style={{ opacity: 0.75 }}>
+                          in @{p.entryTick} {p.entryPrice.toFixed(3)}
+                          {p.exitTick != null ? ` → out @${p.exitTick} ${p.exitPrice!.toFixed(3)}` : " → open"}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontWeight: 900, color: pnl == null ? "rgba(234,242,255,.85)" : (pnl >= 0 ? "rgba(130,255,214,.95)" : "rgba(255,120,120,.95)") }}>
+                          {pnl == null ? "—" : (pnl >= 0 ? "+" : "") + pnl.toFixed(2)}
+                        </div>
+                        <div className="p2-mini" style={{ opacity: 0.7 }}>{p.exitTick != null ? "closed" : "open"}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
         </Panel>
       </div>
 
       {showProof && <ProofModal sessionId={sid} onClose={()=>setShowProof(false)} />}
+      {shareOpen && <ShareSheet sessionId={sid} onClose={() => setShareOpen(false)} />}
     </div>
   );
 }

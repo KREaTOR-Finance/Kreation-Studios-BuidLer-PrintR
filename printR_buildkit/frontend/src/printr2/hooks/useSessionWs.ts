@@ -9,63 +9,89 @@ export function useSessionWs(sessionId: string){
   const wsRef = useRef<WsClient | null>(null);
   const playerId = useMemo(() => getWsPlayerId(), []);
 
+  const lastEventAtRef = useRef<number>(0);
+  const reconnectTimerRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!sessionId) return;
 
     let alive = true;
     let backoff = 250;
 
+    const clearReconnect = () => {
+      if (reconnectTimerRef.current != null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (!alive) return;
+      clearReconnect();
+      const delay = backoff;
+      backoff = Math.min(5000, Math.floor(backoff * 1.6));
+      reconnectTimerRef.current = window.setTimeout(() => {
+        connect();
+      }, delay) as any;
+    };
+
     const connect = () => {
       if (!alive) return;
+      clearReconnect();
+
       setConnectivity("connecting");
+      setConnected(false);
 
       const ws = new WsClient();
       wsRef.current = ws;
       ws.connect(backendWsUrl(playerId));
 
-      setConnected(false);
-
       const offStatus = ws.onStatus((s) => {
         if (!alive) return;
         setConnectivity(s.state);
+
         if (s.state === "open") {
-          // subscribe once socket opens
+          backoff = 250; // reset backoff on healthy connect
           ws.send({ type: "SESSION_SUBSCRIBE", sessionId, clientTs: Date.now() });
         }
+
         if (s.state === "closed" || s.state === "error") {
           setConnected(false);
+          scheduleReconnect();
         }
       });
 
       const off = ws.onEvent((ev: ServerEvent) => {
         if ((ev as any)?.sessionId !== sessionId) return;
+        lastEventAtRef.current = Date.now();
         setConnected(true);
-        // keep connectivity as reported by socket
       });
 
-      // Watchdog: if no events come in shortly after connect, try reconnect.
-      const watchdog = setTimeout(() => {
+      // Watchdog: if we go quiet, resub/reconnect.
+      const watchdog = window.setInterval(() => {
         if (!alive) return;
-        if (!connected) {
-          off();
-          offStatus();
-          ws.close();
-          backoff = Math.min(5000, Math.floor(backoff * 1.6));
-          setTimeout(connect, backoff);
+        const age = Date.now() - (lastEventAtRef.current || 0);
+        // if socket says open but we haven't gotten events in a while, resub then reconnect
+        if (wsRef.current === ws && (ws as any) && age > 8000) {
+          try { ws.send({ type: "SESSION_SUBSCRIBE", sessionId, clientTs: Date.now() }); } catch {}
         }
-      }, 5000);
+        if (age > 15000) {
+          try { ws.close(); } catch {}
+        }
+      }, 3000);
 
       return () => {
-        clearTimeout(watchdog);
+        window.clearInterval(watchdog);
         off();
         offStatus();
-        ws.close();
+        try { ws.close(); } catch {}
       };
     };
 
     const cleanup = connect();
     return () => {
       alive = false;
+      clearReconnect();
       cleanup?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -12,6 +12,7 @@ import { SwitchboardSrsProvider } from "./vrf/switchboardSrsProvider.js";
 import { SessionSeedSwitchboardProvider } from "./vrf/sessionSeedSwitchboardProvider.js";
 import { SafeVrfProvider } from "./vrf/safeProvider.js";
 import { VrfQueue } from "./vrf/queue.js";
+import { createVrfHealthTracker } from "./vrf/health.js";
 import { createSession, stepTick } from "./engine/sessionEngine.js";
 import type { SessionRuntime } from "./engine/models.js";
 import type { ClientEvent } from "./types/events.js";
@@ -37,12 +38,20 @@ import { PostgresAnalyticsStore } from "./analytics/postgresAnalyticsStore.js";
 import { RateLimiter } from "./security/rateLimiter.js";
 import { registerCreditsRoutes } from "./routes/credits.js";
 import { registerPaymentsRoutes } from "./routes/payments.js";
+import { registerReferralRoutes } from "./routes/referrals.js";
+import { SqliteReferralStore } from "./referrals/sqliteReferralStore.js";
+import { PostgresReferralStore } from "./referrals/postgresReferralStore.js";
+import { registerSolanaPaymentsRoutes } from "./routes/solanaPayments.js";
+import { SqliteSolanaPayStore } from "./payments/sqliteSolanaPayStore.js";
+import { PostgresSolanaPayStore } from "./payments/postgresSolanaPayStore.js";
 import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerRoundsRoutes } from "./routes/rounds.js";
 import { registerPrizesRoutes } from "./routes/prizes.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerProofRoutes } from "./routes/proof.js";
+import { registerLeaderboardRoutes } from "./routes/leaderboard.js";
 import { InMemoryEntitlementsStore } from "./sessions/entitlementsStore.js";
+import { InMemoryResultsStore, SqliteResultsStore, type ResultsStore } from "./leaderboard/resultsStore.js";
 
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -82,6 +91,9 @@ if (!databaseUrl && dbPath && (analytics as any).migrate) (analytics as any).mig
 const limiter = new RateLimiter();
 const entitlements = new InMemoryEntitlementsStore();
 
+const results: ResultsStore = dbPath ? new SqliteResultsStore(dbPath) : new InMemoryResultsStore();
+if (dbPath && (results as any).migrate) (results as any).migrate();
+
 // Developer leads store (website developer slot submissions).
 const developerLeads = createDeveloperLeadsStore();
 if ((developerLeads as any).migrate) (developerLeads as any).migrate();
@@ -95,7 +107,19 @@ app.use(cors({
     "idempotency-key"
   ]
 }));
-registerWebhookRoutes(app, { credits, rounds, prizes, receipts, analytics });
+// Referrals store
+const referrals = databaseUrl
+  ? new PostgresReferralStore(databaseUrl)
+  : (dbPath ? new SqliteReferralStore(dbPath) : null);
+if (referrals && (referrals as any).migrate) await (referrals as any).migrate();
+
+// Solana Pay intents store
+const solanaPay = databaseUrl
+  ? new PostgresSolanaPayStore(databaseUrl)
+  : new SqliteSolanaPayStore(dbPath ?? ":memory:");
+if ((solanaPay as any).migrate) await (solanaPay as any).migrate();
+
+registerWebhookRoutes(app, { credits, rounds, prizes, receipts, analytics, referrals: referrals ?? undefined });
 app.use(express.json({ limit: "1mb" }));
 
 const server = http.createServer(app);
@@ -105,6 +129,8 @@ const server = http.createServer(app);
 // - DevVrfProvider for local testing
 // - SwitchboardSrsProvider for Trust-first MVP / production
 const useSwitchboard = process.env.USE_SWITCHBOARD_VRF === "true";
+const vrfHealth = createVrfHealthTracker(useSwitchboard ? "SWITCHBOARD_SESSION" : "DEV");
+let lastVrfWarnMs = 0;
 
 // Base provider: can perform a real on-demand randomness request.
 const baseSwitchboard = useSwitchboard
@@ -124,19 +150,36 @@ const sessionVrf = baseSwitchboard ? new SessionSeedSwitchboardProvider(baseSwit
 // Engine expects a per-tick provider. Always keep a dev fallback so ticks never crash.
 const devFallback = new DevVrfProvider(1337);
 const vrfProvider = sessionVrf
-  ? new SafeVrfProvider(sessionVrf, devFallback, (e) => console.warn("VRF_ERROR", String((e as any)?.message ?? e)))
+  ? new SafeVrfProvider(sessionVrf, devFallback, (e) => {
+      const msg = String((e as any)?.message ?? e);
+      vrfHealth.setDegraded(msg);
+      const now = Date.now();
+      if (now - lastVrfWarnMs > 15_000) {
+        lastVrfWarnMs = now;
+        console.warn("VRF_ERROR", msg);
+      }
+    })
   : devFallback;
 const vrfQueue = new VrfQueue(vrfProvider);
 
 // In-memory sessions + player state (MVP)
 const sessions = new Map<string, SessionRuntime>();
-type PlayerState = { markersRemaining: number; scoreRealized: number; openPositionId?: string };
+type PlayerState = { commitsRemaining: number; scoreRealized: number; openPositionId?: string }; // commitsRemaining=COMMIT ammo for this session
 const playerState = new Map<string, Map<string, PlayerState>>(); // sessionId -> playerId -> state
+const playPermits = new Map<string, Set<string>>(); // sessionId -> playerId
+
+function grantPlay(sessionId: string, playerId: string) {
+  const set = playPermits.get(sessionId) ?? new Set<string>();
+  set.add(playerId);
+  playPermits.set(sessionId, set);
+  const ps = getPlayerState(sessionId, playerId);
+  ps.commitsRemaining = Math.max(ps.commitsRemaining, 10);
+}
 
 function getPlayerState(sessionId: string, playerId: string): PlayerState {
   const smap = playerState.get(sessionId) ?? new Map<string, PlayerState>();
   playerState.set(sessionId, smap);
-  const ps = smap.get(playerId) ?? { markersRemaining: 10, scoreRealized: 1000 };
+  const ps = smap.get(playerId) ?? { commitsRemaining: 0, scoreRealized: 1000 };
   smap.set(playerId, ps);
   return ps;
 }
@@ -151,7 +194,9 @@ function buildHud(session: SessionRuntime, playerId: string, ps: PlayerState) {
     playerId,
     scoreRealized: ps.scoreRealized,
     scoreDisplay,
-    markersRemaining: ps.markersRemaining,
+    // Back-compat: markersRemaining previously meant "actions". Now: commits remaining.
+    commitsRemaining: ps.commitsRemaining,
+    markersRemaining: ps.commitsRemaining,
     hasOpen: !!open,
     openPosition: open ? {
       positionId: open.id,
@@ -163,7 +208,7 @@ function buildHud(session: SessionRuntime, playerId: string, ps: PlayerState) {
       unrealized: unreal
     } : null,
     flags: {
-      finalCloseRequired: !!open && ps.markersRemaining <= 1,
+      finalCloseRequired: false,
       closingPhase: session.phase === "CLOSING"
     }
   };
@@ -180,6 +225,13 @@ function broadcastHud(session: SessionRuntime) {
     const ps = getPlayerState(session.id, client.playerId);
     hub.sendToPlayer(client.playerId, buildHud(session, client.playerId, ps));
   }
+}
+
+function getWalletForPlayer(playerId: string): string | null {
+  for (const c of hub.getClients()) {
+    if (c.playerId === playerId) return (c as any).wallet ?? null;
+  }
+  return null;
 }
 
 function onClientEvent(playerId: string, ev: ClientEvent) {
@@ -218,8 +270,10 @@ function onClientEvent(playerId: string, ev: ClientEvent) {
 
   if (ev.intent === "OPEN") {
     if (closing) return;
-    // Require at least one marker remaining for the eventual close.
-    if (ps.markersRemaining <= 1) return;
+    const permit = playPermits.get(s.id);
+    if (!permit || !permit.has(playerId)) return;
+    // Require commit credit.
+    if (ps.commitsRemaining <= 0) return;
     // enforce max 1 open per player per session
     const alreadyOpen = s.positions.some(p => p.isOpen && p.playerId === playerId);
     if (alreadyOpen) return;
@@ -240,7 +294,7 @@ function onClientEvent(playerId: string, ev: ClientEvent) {
       direction,
       isOpen: true
     });
-    ps.markersRemaining -= 1;
+    ps.commitsRemaining -= 1;
     ps.openPositionId = posId;
 
     hub.sendToPlayer(playerId, { type: "FX_EVENT", sessionId: s.id, playerId, fx: "COMMIT_SONAR", atTickIndex: s.tickIndex });
@@ -251,12 +305,11 @@ function onClientEvent(playerId: string, ev: ClientEvent) {
     const pos = s.positions.find(p => p.isOpen && p.playerId === playerId);
     if (!pos) return;
     if ((s.tickIndex - pos.entryTickIndex) < CONST.MIN_HOLD_TICKS) return;
-    const canSpendMarker = ps.markersRemaining > 0;
 
     pos.isOpen = false;
     const delta = realizedPoints(pos, s.price);
     ps.scoreRealized += delta;
-    if (canSpendMarker) ps.markersRemaining -= 1;
+    // closing does not consume commit credits
     ps.openPositionId = undefined;
 
     hub.sendToPlayer(playerId, { type: "FX_EVENT", sessionId: s.id, playerId, fx: delta >= 0 ? "CLOSE_GAIN" : "CLOSE_LOSS", atTickIndex: s.tickIndex, meta: { pointsDelta: delta } });
@@ -288,7 +341,9 @@ function resetSessions() {
 resetSessions();
 
 
-app.get("/health", (_, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => {
+  return res.json({ ok: true, vrf: vrfHealth.get() });
+});
 
 // ---- Developer Leads (Kreation Studios Games) ----
 // Public endpoint (no auth required). Used by /developers submit form.
@@ -333,18 +388,41 @@ registerCreditsRoutes(app, {
   receipts,
   analytics,
   limiter,
-  playTokenTtlMs: Number(process.env.PLAY_TOKEN_TTL_MS ?? 60 * 60 * 1000)
+  playTokenTtlMs: Number(process.env.PLAY_TOKEN_TTL_MS ?? 60 * 60 * 1000),
+  onJoinPlay: ({ sessionId, playerId }) => {
+    if (sessionId && playerId) grantPlay(sessionId, playerId);
+  }
 });
-registerPaymentsRoutes(app, analytics);
+registerPaymentsRoutes(app, analytics, referrals ?? undefined);
+registerSolanaPaymentsRoutes(app, { credits, solanaPay });
+if (referrals) registerReferralRoutes(app, referrals);
+
 registerRoundsRoutes(app, { rounds, vrf: vrfProvider, limiter, analytics, receipts });
 registerPrizesRoutes(app, { prizes, receipts, analytics, limiter });
 registerSessionRoutes(app, { sessions, entitlements });
 registerProofRoutes(app, { sessions, sessionVrf });
+registerLeaderboardRoutes(app, results);
 
-// Serve mobile web app static files (built by render-build.sh)
+// Serve mobile web app static files (built by frontend build)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "../public");
-app.use(express.static(publicDir));
+
+// Avoid stale-cached index.html in mobile webviews.
+app.use((req, res, next) => {
+  if (req.path === "/" || req.path === "/index.html") {
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+  }
+  next();
+});
+
+app.use(express.static(publicDir, {
+  setHeaders(res, filePath) {
+    // index.html should never be cached hard
+    if (filePath.endsWith("index.html")) {
+      res.setHeader("Cache-Control", "no-store, max-age=0");
+    }
+  }
+}));
 
 app.get("/sessions", (_, res) => {
   res.json(Array.from(sessions.values()).map(s => ({
@@ -390,6 +468,19 @@ setInterval(async () => {
     }
 
     if (prev.phase !== "ENDED" && next.phase === "ENDED") {
+      // Persist final results for this session (authoritative, grindy leaderboard uses SUM).
+      const endedAtMs = Date.now();
+      const pmap = playerState.get(next.id) ?? new Map();
+      for (const [pid, ps] of pmap.entries() as any) {
+        const wallet = getWalletForPlayer(pid) ?? pid;
+        const open = next.positions.find(p => p.isOpen && p.playerId === pid) ?? null;
+        const unreal = open ? unrealizedPoints(open, next.price) : 0;
+        const finalScore = (ps.scoreRealized ?? 0) + unreal;
+        const commitsRemaining = (ps.commitsRemaining ?? 0);
+        const commitsUsed = Math.max(0, 10 - commitsRemaining);
+        results.upsert({ sessionId: next.id, wallet, finalScore, commitsUsed, endedAtMs }).catch(() => {});
+      }
+
       const forfeits = next.positions.filter(p => p.isOpen);
       if (forfeits.length) {
         next = {

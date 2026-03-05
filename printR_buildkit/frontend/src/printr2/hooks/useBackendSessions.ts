@@ -19,29 +19,28 @@ export function useBackendSessions(){
   const [status, setStatus] = useState<"ok"|"loading"|"error">("loading");
   const [error, setError] = useState<string | null>(null);
 
+  const refresh = async () => {
+    try {
+      const base = (typeof window !== "undefined" && window.location.port === "3001") ? "" : backendHttpBase();
+      const res = await fetch(`${base}/sessions`, { method: "GET" });
+      if (!res.ok) throw new Error(`HTTP_${res.status}`);
+      const j = await res.json();
+      setItems(Array.isArray(j) ? j : []);
+      setStatus("ok");
+      setError(null);
+    } catch (e: any) {
+      setStatus("error");
+      setError(e?.message ?? "FAILED_TO_FETCH");
+    }
+  };
+
   useEffect(() => {
     let alive = true;
-
-    const run = async () => {
-      try {
-        const res = await fetch(`${backendHttpBase()}/sessions`, { method: "GET" });
-        if (!res.ok) throw new Error(`HTTP_${res.status}`);
-        const j = await res.json();
-        if (!alive) return;
-        setItems(Array.isArray(j) ? j : []);
-        setStatus("ok");
-        setError(null);
-      } catch (e: any) {
-        if (!alive) return;
-        setStatus("error");
-        setError(e?.message ?? "FAILED_TO_FETCH");
-      }
-    };
-
-    run();
-    const t = setInterval(run, 2500);
+    (async () => { if (alive) await refresh(); })();
+    const t = setInterval(() => { if (alive) void refresh(); }, 2500);
     return () => { alive = false; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { items, status, error };
+  return { items, status, error, refresh };
 }

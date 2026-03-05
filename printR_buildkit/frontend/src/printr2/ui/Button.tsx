@@ -6,6 +6,7 @@ export function Button(props: {
   onClick?: () => void;
   children: React.ReactNode;
   type?: "button" | "submit";
+  disabled?: boolean;
 }){
   const v = props.variant ?? "primary";
   const cls = [
@@ -14,7 +15,13 @@ export function Button(props: {
     props.className ?? ""
   ].join(" ");
   return (
-    <button type={props.type ?? "button"} className={cls} onClick={props.onClick}>
+    <button
+      type={props.type ?? "button"}
+      className={cls}
+      onClick={props.onClick}
+      disabled={props.disabled}
+      style={props.disabled ? { opacity: 0.55, cursor: "not-allowed" } : undefined}
+    >
       {props.children}
     </button>
   );

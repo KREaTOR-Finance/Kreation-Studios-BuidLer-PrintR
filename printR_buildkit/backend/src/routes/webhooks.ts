@@ -3,7 +3,8 @@ import express, { type Express } from "express";
 import type { CreditsStore } from "../credits/store.js";
 import type { RoundsStore } from "../rounds/store.js";
 import type { PrizesStore } from "../prizes/store.js";
-import { BundleToSessions, extractCheckoutCompleted, verifyStripeWebhook } from "../payments/stripe.js";
+import { BundleToSessions, BundleToUsdCents, extractCheckoutCompleted, verifyStripeWebhook } from "../payments/stripe.js";
+import type { ReferralStore } from "../referrals/store.js";
 import type { ReceiptsStore } from "../ledger/receiptsStore.js";
 import type { AnalyticsStore } from "../analytics/store.js";
 
@@ -15,9 +16,10 @@ export function registerWebhookRoutes(
     prizes?: PrizesStore;
     receipts?: ReceiptsStore;
     analytics?: AnalyticsStore;
+    referrals?: ReferralStore;
   }
 ) {
-  const { credits, rounds, prizes, receipts, analytics } = args;
+  const { credits, rounds, prizes, receipts, analytics, referrals } = args;
   app.post("/webhooks/stripe", express.raw({ type: "application/json" }), async (req, res) => {
     try {
       const event = verifyStripeWebhook(req);
@@ -74,6 +76,30 @@ export function registerWebhookRoutes(
       }
 
       const sessions = BundleToSessions[parsed.bundle];
+
+      // Referral purchase accounting + referrer bonus
+      let referrerPlayer: string | null = null;
+      let referrerCode: string | null = null;
+      let firstPurchase = false;
+      if (referrals) {
+        const marked = await referrals.markPurchase(parsed.playerRef, Date.now()).catch(() => ({ firstPurchase: false, referrerCode: null } as any));
+        firstPurchase = !!marked.firstPurchase;
+        referrerCode = marked.referrerCode;
+        if (referrerCode) {
+          // record volume for leaderboard (all purchases, not just first)
+          await referrals.recordReferredPurchase({
+            referredPlayerRef: parsed.playerRef,
+            referrerCode,
+            usdCents: BundleToUsdCents[parsed.bundle],
+            bundle: parsed.bundle,
+            externalRef: parsed.externalRef,
+            atMs: Date.now()
+          }).catch(() => {});
+
+          referrerPlayer = await referrals.getPlayerRefByCode(referrerCode).catch(() => null);
+        }
+      }
+
       await credits.addLedger({
         playerRef: parsed.playerRef,
         deltaSessions: sessions,
@@ -81,8 +107,28 @@ export function registerWebhookRoutes(
         source: "stripe",
         externalRef: parsed.externalRef,
         idempotencyKey: event.id,
-        meta: { bundle: parsed.bundle, checkoutSessionId: parsed.externalRef, eventId: event.id }
+        meta: {
+          bundle: parsed.bundle,
+          checkoutSessionId: parsed.externalRef,
+          eventId: event.id,
+          discountPct: parsed.discountPct,
+          referralCodeUsed: parsed.referralCodeUsed ?? ""
+        }
       });
+
+      // Referrer bonus: +10% sessions on referred user's FIRST purchase
+      if (referrerPlayer && firstPurchase) {
+        const bonus = Math.max(1, Math.floor(sessions * 0.10));
+        await credits.addLedger({
+          playerRef: referrerPlayer,
+          deltaSessions: bonus,
+          reason: "adjustment",
+          source: "stripe",
+          externalRef: parsed.externalRef,
+          idempotencyKey: `${event.id}:referral_bonus`,
+          meta: { referred: parsed.playerRef, referrerCode, bonusSessions: bonus, reason: "referral_bonus" }
+        }).catch(() => {});
+      }
 
       receipts?.record({
         playerRef: parsed.playerRef,

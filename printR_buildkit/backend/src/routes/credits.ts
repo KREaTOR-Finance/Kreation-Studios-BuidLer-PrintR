@@ -20,6 +20,7 @@ export function registerCreditsRoutes(
     limiter?: RateLimiter;
     playTokenTtlMs?: number;
     resumeGraceMs?: number;
+    onJoinPlay?: (info: { playerRef: string; sessionId: string; playerId?: string }) => void;
   }
 ) {
   const { credits, sessions, entitlements, receipts, analytics, limiter } = args;
@@ -40,6 +41,7 @@ export function registerCreditsRoutes(
 
   app.post("/api/sessions/:sessionId/join", requirePlayerRef, async (req, res) => {
     const playerRef = getPlayerRef(req);
+    const playerId = typeof (req.body as any)?.playerId === "string" ? String((req.body as any).playerId) : undefined;
     if (limiter && !limiter.allow(`join:${playerRef}`, 12, 60_000)) {
       return res.status(429).json({ error: "RATE_LIMITED" });
     }
@@ -91,6 +93,7 @@ export function registerCreditsRoutes(
             expiresAt: s.endTimeMs + resumeGraceMs
           });
         }
+        args.onJoinPlay?.({ playerRef, sessionId, playerId });
         console.info("join_duplicate", { playerRef, sessionId, sessionsBalance });
         return res.json({
           join: "play",
@@ -103,8 +106,18 @@ export function registerCreditsRoutes(
       }
 
       const sessionsBalance = await credits.getBalance(playerRef);
+      if (entitlements) {
+        await entitlements.upsert({
+          playerRef,
+          sessionId,
+          mode: "spectate",
+          createdAt: now,
+          lastSeenAt: now,
+          expiresAt: s.endTimeMs + resumeGraceMs
+        });
+      }
       console.warn("join_denied_insufficient", { playerRef, sessionId, sessionsBalance });
-      return res.status(402).json({ error: "INSUFFICIENT_SESSIONS", sessionsBalance });
+      return res.json({ join: "spectate", sessionId, phase, sessionsBalance });
     }
 
     receipts?.record({
@@ -135,6 +148,8 @@ export function registerCreditsRoutes(
         expiresAt: s.endTimeMs + resumeGraceMs
       });
     }
+    args.onJoinPlay?.({ playerRef, sessionId, playerId });
+
     console.info("credit_consumed", { playerRef, sessionId, phase, sessionsBalance: consume.balance });
     return res.json({
       join: "play",

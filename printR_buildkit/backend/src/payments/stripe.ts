@@ -1,17 +1,21 @@
 import Stripe from "stripe";
 import type { Request } from "express";
 
-export type StripeBundle = "BUNDLE_10" | "BUNDLE_100" | "RESET_POINTS";
+export type StripeBundle = "BUNDLE_1" | "BUNDLE_5" | "BUNDLE_15" | "BUNDLE_99" | "RESET_POINTS";
 
 export const BundleToSessions: Record<StripeBundle, number> = {
-  BUNDLE_10: 40,
-  BUNDLE_100: 500,
+  BUNDLE_1: 4,
+  BUNDLE_5: 20,
+  BUNDLE_15: 60,
+  BUNDLE_99: 396,
   RESET_POINTS: 0
 };
 
 export const BundleToUsdCents: Record<StripeBundle, number> = {
-  BUNDLE_10: 1000,
-  BUNDLE_100: 10000,
+  BUNDLE_1: 100,
+  BUNDLE_5: 500,
+  BUNDLE_15: 1500,
+  BUNDLE_99: 9900,
   RESET_POINTS: 500
 };
 
@@ -26,9 +30,13 @@ export async function createCheckoutUrl(args: {
   bundle: StripeBundle;
   successUrl: string;
   cancelUrl: string;
+  discountPct?: number; // 0..100
+  referralCodeUsed?: string | null;
 }): Promise<{ url: string; sessionId: string }>{
   const stripe = getStripeClient();
-  const amount = BundleToUsdCents[args.bundle];
+  const baseAmount = BundleToUsdCents[args.bundle];
+  const pct = Math.max(0, Math.min(100, Number(args.discountPct ?? 0)));
+  const amount = pct > 0 ? Math.max(50, Math.round(baseAmount * (1 - pct / 100))) : baseAmount;
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -37,7 +45,9 @@ export async function createCheckoutUrl(args: {
     client_reference_id: args.playerRef,
     metadata: {
       playerRef: args.playerRef,
-      bundle: args.bundle
+      bundle: args.bundle,
+      discountPct: String(pct),
+      referralCodeUsed: args.referralCodeUsed ? String(args.referralCodeUsed) : ""
     },
     line_items: [
       {
@@ -48,12 +58,22 @@ export async function createCheckoutUrl(args: {
           product_data: {
             name: args.bundle === "RESET_POINTS"
               ? "PrintR Points Reset"
-              : (args.bundle === "BUNDLE_10" ? "PrintR Sessions (40)" : "PrintR Sessions (500)"),
+              : (args.bundle === "BUNDLE_1"
+                ? "PrintR Plays (4)"
+                : (args.bundle === "BUNDLE_5"
+                  ? "PrintR Plays (20)"
+                  : (args.bundle === "BUNDLE_15"
+                    ? "PrintR Plays (60)"
+                    : "PrintR Plays (396)"))),
             description: args.bundle === "RESET_POINTS"
               ? "Reset your points back to zero. Streak is untouched."
-              : (args.bundle === "BUNDLE_10"
-                ? "40 session credits. Minimum buy."
-                : "500 session credits. Bulk pack.")
+              : (args.bundle === "BUNDLE_1"
+                ? "4 plays. Starter."
+                : (args.bundle === "BUNDLE_5"
+                  ? "20 plays."
+                  : (args.bundle === "BUNDLE_15"
+                    ? "60 plays."
+                    : "396 plays.")))
           }
         }
       }
@@ -81,14 +101,17 @@ export function verifyStripeWebhook(req: Request): Stripe.Event {
   return stripe.webhooks.constructEvent(raw, sig, secret);
 }
 
-export function extractCheckoutCompleted(event: Stripe.Event): { playerRef: string; bundle: StripeBundle; externalRef: string } | null {
+export function extractCheckoutCompleted(event: Stripe.Event): { playerRef: string; bundle: StripeBundle; externalRef: string; discountPct: number; referralCodeUsed?: string | null } | null {
   if (event.type !== "checkout.session.completed") return null;
   const session = event.data.object as Stripe.Checkout.Session;
 
   const playerRef = (session.metadata?.playerRef ?? session.client_reference_id ?? "").toString();
   const bundle = (session.metadata?.bundle ?? "").toString() as StripeBundle;
 
-  if (!playerRef || (bundle !== "BUNDLE_10" && bundle !== "BUNDLE_100" && bundle !== "RESET_POINTS")) return null;
+  if (!playerRef || (bundle !== "BUNDLE_1" && bundle !== "BUNDLE_5" && bundle !== "BUNDLE_15" && bundle !== "BUNDLE_99" && bundle !== "RESET_POINTS")) return null;
 
-  return { playerRef, bundle, externalRef: session.id };
+  const discountPct = Number(session.metadata?.discountPct ?? 0);
+  const referralCodeUsed = (session.metadata?.referralCodeUsed ?? "").toString() || null;
+
+  return { playerRef, bundle, externalRef: session.id, discountPct: Number.isFinite(discountPct) ? discountPct : 0, referralCodeUsed };
 }

@@ -31,3 +31,4 @@ export class SafeVrfProvider implements VrfProvider {
     }
   }
 }
+

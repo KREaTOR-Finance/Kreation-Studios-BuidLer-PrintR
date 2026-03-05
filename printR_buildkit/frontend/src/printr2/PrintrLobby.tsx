@@ -6,6 +6,9 @@ import "./ui.css";
 import "./screens.css";
 
 import { Button, Panel, Pill } from "./ui";
+import { apiPost } from "../network/httpClient";
+import { getPrintr2PlayerRef } from "./playerRef";
+import { getWsPlayerId } from "../network/wsClient";
 
 type SessionItem = {
   id: string;
@@ -22,18 +25,28 @@ type SessionItem = {
 
 export function PrintrLobby(){
   const nav = useNavigate();
-  const { items, status, error } = useBackendSessions();
+  const { items, status, error, refresh } = useBackendSessions();
+  const player = useMemo(() => ({ playerRef: getPrintr2PlayerRef() }), []);
+  const playerId = useMemo(() => getWsPlayerId(), []);
+  const [joining, setJoining] = useState<string | null>(null);
+  const [joinErr, setJoinErr] = useState<string | null>(null);
 
   const now = Date.now();
   const ordered = useMemo(() => {
-    const score = (s: SessionItem) => {
-      const closing = now >= s.closingTimeMs;
-      const ended = now >= s.endTimeMs;
-      if (ended) return 9999;
-      if (closing) return 1000 + (s.endTimeMs - now);
-      return (s.endTimeMs - now);
+    const phaseRank = (s: SessionItem) => {
+      if (now >= s.endTimeMs) return 3;
+      if (now >= s.closingTimeMs) return 2;
+      return 1;
     };
-    return [...items].sort((a,b)=>score(a)-score(b));
+    return [...items]
+      .filter(s => now < s.endTimeMs)
+      .sort((a,b) => {
+        const ra = phaseRank(a);
+        const rb = phaseRank(b);
+        if (ra !== rb) return ra - rb;
+        // within same rank, earlier end first
+        return (a.endTimeMs - now) - (b.endTimeMs - now);
+      });
   }, [items, now]);
 
   return (
@@ -48,11 +61,35 @@ export function PrintrLobby(){
 
         <main className="p2-lobby">
           {status !== "ok" && (
-            <div className="p2-sub">{status === "loading" ? "Connecting…" : `Backend offline: ${error ?? "FAILED"}`}</div>
+            <div className="p2-sub" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span>{status === "loading" ? "Connecting…" : `Backend offline: ${error ?? "FAILED"}`}</span>
+              <Button variant="secondary" onClick={() => void refresh()}>Retry</Button>
+            </div>
           )}
+          {joinErr ? <div className="p2-mini" style={{ color: "rgba(255,120,120,.95)", marginBottom: 10 }}>{joinErr}</div> : null}
           <div className="p2-grid">
             {ordered.map(s => (
-              <Panel key={s.id} as="button" className="p2-card" onClick={()=>nav(`/session/${s.id}`)}>
+              <Panel
+                key={s.id}
+                as="button"
+                className="p2-card"
+                onClick={async () => {
+                  setJoinErr(null);
+                  setJoining(s.id);
+                  try {
+                    const idem = `${playerId}:${s.id}`;
+                    await apiPost(`/api/sessions/${s.id}/join`, { playerId }, { ...player, idempotencyKey: idem } as any);
+                    nav(`/session/${s.id}`);
+                  } catch (e: any) {
+                    const msg = e?.message ?? "JOIN_FAILED";
+                    setJoinErr(msg);
+                    // allow spectate even if you have no credits
+                    nav(`/session/${s.id}`);
+                  } finally {
+                    setJoining(null);
+                  }
+                }}
+              >
                 <div className="p2-cardTop">
                   <div className="p2-cardTitle">{s.assetName}</div>
                   <Pill tone={now >= s.endTimeMs ? "dead" : now >= s.closingTimeMs ? "warn" : "live"}>{pillText(s, now)}</Pill>
@@ -68,8 +105,8 @@ export function PrintrLobby(){
                   </div>
                 </div>
                 <div className="p2-cardBottom">
+                  <div className="p2-mini">{pillText(s, now)} • {fmtTime(now >= s.closingTimeMs ? (s.endTimeMs - now) : (s.closingTimeMs - now))}</div>
                   <div className="p2-mini">Regime {s.marketIndex} • {s.archetype}</div>
-                  <div className="p2-mini">Supply {fmtSupply(s.supply)}</div>
                 </div>
               </Panel>
             ))}
@@ -84,6 +121,13 @@ function fmtSupply(n: number){
   if (n >= 1_000_000_000) return `${(n/1_000_000_000).toFixed(0)}B`;
   if (n >= 1_000_000) return `${(n/1_000_000).toFixed(0)}M`;
   return String(n);
+}
+
+function fmtTime(ms: number){
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2,'0')}`;
 }
 
 function pillText(s: SessionItem, now: number){

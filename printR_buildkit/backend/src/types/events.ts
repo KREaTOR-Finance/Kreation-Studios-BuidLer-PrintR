@@ -99,6 +99,7 @@ export const PlayerHudSchema = z.object({
   playerId: z.string().uuid(),
   scoreRealized: z.number(),
   scoreDisplay: z.number(),
+  commitsRemaining: z.number().int().optional(),
   markersRemaining: z.number().int(),
   hasOpen: z.boolean(),
   openPosition: z

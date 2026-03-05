@@ -5,11 +5,33 @@ import "./tokens.css";
 import "./ui.css";
 import "./screens.css";
 
-import { Button } from "./ui";
+import { Button, Panel } from "./ui";
+import { ConnectButton } from "./wallet/ConnectButton";
+import { apiGet, apiPost } from "../network/httpClient";
+import { getPrintr2PlayerRef } from "./playerRef";
 
 export function PrintrLanding(){
   const nav = useNavigate();
   const [showTutorial, setShowTutorial] = useState(false);
+
+  const player = useMemo(() => ({ playerRef: getPrintr2PlayerRef() }), []);
+  const [myCode, setMyCode] = useState<string | null>(null);
+  const [refInput, setRefInput] = useState("");
+  const [refMsg, setRefMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await apiGet<{ ok: boolean; referralCode: string }>("/api/referrals/me", player);
+        if (!alive) return;
+        setMyCode(r.referralCode);
+      } catch {
+        // referrals might not be enabled in this backend env
+      }
+    })();
+    return () => { alive = false; };
+  }, [player]);
 
   useEffect(() => {
     const seen = localStorage.getItem("printr:tutorial:seen") === "1";
@@ -39,10 +61,10 @@ export function PrintrLanding(){
               <div className="p2-mini" style={{ marginTop: 2, letterSpacing: ".16em" }}>by Kreation Studios</div>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="p2-topActions">
+            <Button variant="ghost" onClick={() => nav("/transparency")}>Transparency</Button>
             <Button variant="ghost" onClick={openTutorial}>How it works</Button>
-            {/* Wallet optional on landing */}
-            {/**/}
+            <ConnectButton compact />
           </div>
         </header>
 
@@ -58,7 +80,52 @@ export function PrintrLanding(){
 
           <div className="p2-ctaRow">
             <Button onClick={() => nav("/play")}>PLAY</Button>
-            <Button variant="secondary" onClick={openTutorial}>TUTORIAL</Button>
+            <Button variant="secondary" onClick={() => nav("/store")}>STORE</Button>
+            <Button variant="ghost" onClick={() => nav("/leaderboard")}>LEADERBOARD</Button>
+          </div>
+
+          <div style={{ marginTop: 16, width: "min(640px, 100%)" }}>
+            <Panel className="p2-panel" as="div">
+              <div className="p2-panelTitle">Referrals</div>
+              <div className="p2-panelSub">New buyers get 50% off their first purchase with a code. Referrers earn +10% sessions on first purchase.</div>
+
+              <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+                <div>
+                  <div className="p2-mini">YOUR CODE</div>
+                  <div style={{ fontWeight: 900, letterSpacing: 0.6 }}>{myCode ?? "—"}</div>
+                  <div className="p2-mini" style={{ opacity: 0.75, marginTop: 4 }}>Share this code with friends.</div>
+                </div>
+
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div className="p2-mini">APPLY A CODE</div>
+                  <input
+                    value={refInput}
+                    onChange={(e) => setRefInput(e.target.value)}
+                    placeholder="KRE-XXXXXXXX"
+                    className="p2-input"
+                    style={{ height: 44, borderRadius: 12, padding: "0 12px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", color: "white" }}
+                  />
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <Button
+                      variant="secondary"
+                      onClick={async () => {
+                        setRefMsg(null);
+                        try {
+                          await apiPost("/api/referrals/apply", { code: refInput }, player);
+                          setRefMsg("Referral applied.");
+                        } catch (e: any) {
+                          setRefMsg(e?.message ?? "Failed to apply.");
+                        }
+                      }}
+                    >
+                      APPLY
+                    </Button>
+                    <Button variant="ghost" onClick={() => { setRefInput(""); setRefMsg(null); }}>CLEAR</Button>
+                  </div>
+                  {refMsg ? <div className="p2-mini" style={{ opacity: 0.85 }}>{refMsg}</div> : null}
+                </div>
+              </div>
+            </Panel>
           </div>
 
           <div className="p2-footnote">

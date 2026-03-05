@@ -106,9 +106,9 @@
   100%{ transform: translateY(0) scale(1); filter: brightness(1); }
 }
 @keyframes p2-bloom{
-  0%{ box-shadow: 0 0 0 rgba(130,255,214,0); }
-  30%{ box-shadow: 0 0 28px rgba(130,255,214,.18), 0 0 0 1px rgba(130,255,214,.14) inset; }
-  100%{ box-shadow: 0 0 0 rgba(130,255,214,0); }
+  0%{ opacity: 0; }
+  25%{ opacity: .55; }
+  100%{ opacity: 0; }
 }
 
 .p2-padFx{ position: relative; }
@@ -124,4 +124,4 @@
 
 .p2-snapGo{ animation: p2-snap 220ms cubic-bezier(.2,.9,.2,1) 1; }
 
-.p2-chartBloom{ animation: p2-bloom 260ms ease-out 1; }
+.p2-chartBloom::after{ animation: p2-bloom 260ms ease-out 1; }
