@@ -10,7 +10,7 @@ import "./ui.css";
 import "./screens.css";
 
 import { backendWsUrl, backendHttpBase } from "./net";
-import { Button, Panel, Pill, Toggle, NotchSlider } from "./ui";
+import { Button, Panel, Pill, Toggle, NotchSlider, TopBar, TopActions } from "./ui";
 import { TapeChart } from "./ui/TapeChart";
 import { ConnectButton } from "./wallet/ConnectButton";
 import { ShareSheet } from "./share/ShareSheet";
@@ -174,18 +174,22 @@ export function PrintrGame(){
     <div className="p2-root">
       <div className="p2-noise" />
       <div className="p2-frame p2-gameFrame">
-        <header className="p2-top">
-          <Button variant="ghost" onClick={()=>nav("/play")}>Exit</Button>
-          <div className="p2-topCenter">
-            {connectivity !== "open" ? <div className="p2-mini" style={{ color: "rgba(255,120,120,.95)" }}>WS {connectivity}</div> : <div className="p2-mini">WS OPEN</div>}
-            <Pill tone={phase === "CLOSING" ? "warn" : "live"}>{phase}</Pill>
-            <div className="p2-timer">{timeText}</div>
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <Button variant="ghost" onClick={()=>setShareOpen(true)}>Share</Button>
-            <Button variant="ghost" onClick={()=>setShowProof(true)}>Proof</Button>
-          </div>
-        </header>
+        <TopBar
+          left={<Button variant="ghost" onClick={()=>nav("/play")}>Exit</Button>}
+          center={(
+            <>
+              {connectivity !== "open" ? <div className="p2-mini p2-error">WS {connectivity}</div> : <div className="p2-mini">WS OPEN</div>}
+              <Pill tone={phase === "CLOSING" ? "warn" : "live"}>{phase}</Pill>
+              <div className="p2-timer">{timeText}</div>
+            </>
+          )}
+          right={(
+            <TopActions>
+              <Button variant="ghost" onClick={()=>setShareOpen(true)}>Share</Button>
+              <Button variant="ghost" onClick={()=>setShowProof(true)}>Proof</Button>
+            </TopActions>
+          )}
+        />
 
         {phase === "CLOSING" ? (
           <div className="p2-fxToast" style={{ background: "rgba(255,204,102,.08)", borderColor: "rgba(255,204,102,.22)" }}>

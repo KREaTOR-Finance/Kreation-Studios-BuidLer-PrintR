@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Panel } from "./ui";
+import { Button, Panel, TopBar } from "./ui";
 import { backendHttpBase } from "./net";
 
 function abbr(wallet: string){
@@ -36,13 +36,11 @@ export function PrintrLeaderboard(){
     <div className="p2-root">
       <div className="p2-noise" />
       <div className="p2-frame p2-gameFrame">
-        <header className="p2-top">
-          <Button variant="ghost" onClick={()=>nav("/")}>Home</Button>
-          <div className="p2-topCenter">
-            <div className="p2-mini">LEADERBOARD</div>
-          </div>
-          <div style={{ width: 72 }} />
-        </header>
+        <TopBar
+          left={<Button variant="ghost" onClick={()=>nav("/")}>Home</Button>}
+          center={<div className="p2-mini">LEADERBOARD</div>}
+          right={null}
+        />
 
         <Panel className="p2-card">
           {err ? (

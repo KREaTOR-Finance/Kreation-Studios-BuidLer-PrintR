@@ -45,9 +45,9 @@ export function ConnectButton(props: { compact?: boolean } = {}){
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: props.compact ? "center" : "flex-end" }}>
+    <div className={props.compact ? "p2-connectWrap p2-connectCompact" : "p2-connectWrap"}>
       <Button variant={connected ? "secondary" : "ghost"} onClick={onClick}>{label}</Button>
-      {!props.compact && err ? <div className="p2-mini" style={{ maxWidth: 240, textAlign: "right" }}>wallet: {err}</div> : null}
+      {!props.compact && err ? <div className="p2-mini p2-connectErr">wallet: {err}</div> : null}
     </div>
   );
 }

@@ -6,6 +6,10 @@
 .p2-topCenter{ display:flex; align-items:center; gap:10px; flex-wrap: wrap; justify-content:center; }
 .p2-topActions{ display:flex; align-items:center; justify-content:flex-end; gap: 10px; flex-wrap: wrap; }
 .p2-topActions > button{ white-space: nowrap; }
+
+.p2-topSlot{ width: 88px; flex: 0 0 88px; display:flex; align-items:center; }
+.p2-topLeft{ justify-content:flex-start; }
+.p2-topRight{ justify-content:flex-end; }
 .p2-timer{ font-weight: 900; letter-spacing: .08em; color: var(--p2-ink2); }
 
 .p2-mark{ display:flex; align-items:center; gap:10px; }

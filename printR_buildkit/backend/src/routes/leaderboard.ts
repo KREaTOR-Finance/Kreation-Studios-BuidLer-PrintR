@@ -1,9 +1,10 @@
 import type { Express } from "express";
 import type { ResultsStore } from "../leaderboard/resultsStore.js";
+import { requireAuth } from "../middleware/auth.js";
 
 export function registerLeaderboardRoutes(app: Express, results: ResultsStore) {
   // Per-session leaderboard
-  app.get("/api/leaderboard/session/:sessionId", async (req, res) => {
+  app.get("/api/leaderboard/session/:sessionId", requireAuth, async (req, res) => {
     try {
       const sessionId = String(req.params.sessionId ?? "");
       const rows = await results.listSession(sessionId);
@@ -14,7 +15,7 @@ export function registerLeaderboardRoutes(app: Express, results: ResultsStore) {
   });
 
   // All-time grindy leaderboard (sum of all session results)
-  app.get("/api/leaderboard/all", async (_req, res) => {
+  app.get("/api/leaderboard/all", requireAuth, async (_req, res) => {
     try {
       const rows = await results.sumAllTime();
       return res.json({ ok: true, scope: "all", rows });

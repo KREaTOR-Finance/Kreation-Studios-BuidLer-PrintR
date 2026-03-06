@@ -5,7 +5,7 @@ import "./tokens.css";
 import "./ui.css";
 import "./screens.css";
 
-import { Button, Panel, Pill } from "./ui";
+import { Button, Panel, Pill, TopBar } from "./ui";
 import { apiPost } from "../network/httpClient";
 import { getPrintr2PlayerRef } from "./playerRef";
 import { getWsPlayerId } from "../network/wsClient";
@@ -53,11 +53,11 @@ export function PrintrLobby(){
     <div className="p2-root">
       <div className="p2-noise" />
       <div className="p2-frame">
-        <header className="p2-top">
-          <Button variant="ghost" onClick={()=>nav("/")}>Back</Button>
-          <div className="p2-markText" style={{ opacity: 0.9 }}>Choose a session</div>
-          <div style={{ width: 72 }} />
-        </header>
+        <TopBar
+          left={<Button variant="ghost" onClick={()=>nav("/")}>Back</Button>}
+          center={<div className="p2-markText" style={{ opacity: 0.9 }}>Choose a session</div>}
+          right={null}
+        />
 
         <main className="p2-lobby">
           {status !== "ok" && (

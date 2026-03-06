@@ -13,13 +13,21 @@ export class WsHub {
     // Use same-origin WS endpoint for mobile webviews: ws(s)://host:PORT/ws
     this.wss = new WebSocketServer({ server, path: "/ws" });
     this.onClientEvent = onClientEvent;
-    this.wss.on("connection", (ws, req) => this.onConn(ws, req));
+    this.wss.on("connection", (ws, req) => { void this.onConn(ws, req); });
   }
 
-  private onConn(ws: WebSocket, req: IncomingMessage) {
+  private async onConn(ws: WebSocket, req: IncomingMessage) {
     const url = new URL(req.url ?? "", "http://localhost");
-    const playerId = url.searchParams.get("playerId") ?? "00000000-0000-0000-0000-000000000000";
-    const wallet = url.searchParams.get("wallet") ?? undefined;
+    const token = url.searchParams.get("token") ?? "";
+    const claims = token ? (await import("../auth/tokens.js")).verifyToken(token) : null;
+    const wallet = claims?.wallet;
+    if (!wallet) {
+      try { ws.close(1008, "UNAUTHORIZED"); } catch {}
+      return;
+    }
+
+    // Canonical identity for WS + engine: wallet pubkey.
+    const playerId = wallet;
     const client: WsClient = { ws, playerId, wallet, sessionSubs: new Set() };
     this.clients.add(client);
 

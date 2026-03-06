@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import { clusterApiUrl } from "@solana/web3.js";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-wallets";
 import { SolanaMobileWalletAdapter } from "@solana-mobile/wallet-adapter-mobile";
+import { AuthGate } from "./AuthGate";
 
 const WALLET_KEY = "printr:wallet:pubkey";
 
@@ -39,7 +40,9 @@ export function WalletGate(props: { children: React.ReactNode }){
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletStorageBridge />
-        {props.children}
+        <AuthGate>
+          {props.children}
+        </AuthGate>
       </WalletProvider>
     </ConnectionProvider>
   );

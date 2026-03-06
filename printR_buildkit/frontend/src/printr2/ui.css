@@ -1,6 +1,10 @@
 /* Root + frame */
 .p2-root{
   min-height:100dvh;
+  font-family: var(--p2-font);
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   background:
     radial-gradient(1200px 900px at 20% -10%, rgba(130,255,214,.22), transparent 60%),
     radial-gradient(900px 700px at 110% 0%, rgba(130,255,214,.10), transparent 55%),
@@ -34,7 +38,9 @@
 }
 
 /* Buttons */
-.p2-btn{ border-radius: var(--p2-r16); font-weight: 900; letter-spacing: .12em; border:0; }
+.p2-btn{ border-radius: var(--p2-r16); font-weight: 900; letter-spacing: .12em; border:0; min-height: 48px; display:inline-flex; align-items:center; justify-content:center; gap: 8px; cursor:pointer; -webkit-tap-highlight-color: transparent; }
+.p2-btn:focus-visible{ outline:none; box-shadow: 0 0 0 3px rgba(130,255,214,.22), 0 0 0 1px rgba(130,255,214,.55) inset; }
+.p2-btn:disabled{ opacity: .55; cursor:not-allowed; }
 
 .p2-btnPrimary{
   background: linear-gradient(180deg, rgba(130,255,214,.95), rgba(130,255,214,.78));
@@ -60,8 +66,20 @@
   padding: 10px 12px;
   letter-spacing: .08em;
   border-radius: var(--p2-r12);
-  min-height: 44px;
 }
+
+.p2-panelTitle{ font-weight: 950; letter-spacing: .12em; text-transform: uppercase; font-size: 12px; opacity: .92; }
+.p2-panelSub{ margin-top: 8px; color: var(--p2-ink2); font-size: 14px; line-height: 1.35; }
+.p2-input{ height: 48px; border-radius: var(--p2-r12); padding: 0 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.10); color: var(--p2-ink); }
+.p2-input::placeholder{ color: rgba(234,242,255,.45); }
+.p2-input:focus-visible{ outline: none; border-color: rgba(130,255,214,.45); box-shadow: 0 0 0 3px rgba(130,255,214,.12); }
+.p2-row{ width: 100%; }
+.p2-error{ color: var(--p2-danger); }
+
+/* Wallet connect */
+.p2-connectWrap{ display:flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.p2-connectCompact{ align-items: center; }
+.p2-connectErr{ max-width: 240px; text-align: right; }
 
 /* Badge / Pill */
 .p2-pill{ font-size: 11px; padding: 6px 10px; border-radius: 999px; letter-spacing:.12em; font-weight: 900; }

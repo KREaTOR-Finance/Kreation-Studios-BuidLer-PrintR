@@ -4,7 +4,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, createTransferCheckedInstruction } from "@solana/spl-token";
 
-import { Panel, Button } from "./ui";
+import { Panel, Button, TopBar, TopActions } from "./ui";
 import { ConnectButton } from "./wallet/ConnectButton";
 import { apiPost } from "../network/httpClient";
 import { getPrintr2PlayerRef } from "./playerRef";
@@ -111,15 +111,11 @@ export function PrintrStore(){
     <div className="p2-root">
       <div className="p2-noise" />
       <div className="p2-frame">
-        <header className="p2-top">
-          <Button variant="ghost" onClick={() => nav("/")}>Home</Button>
-          <div className="p2-topCenter">
-            <div className="p2-mini">STORE</div>
-          </div>
-          <div className="p2-topActions">
-            <ConnectButton compact />
-          </div>
-        </header>
+        <TopBar
+          left={<Button variant="ghost" onClick={() => nav("/")}>Home</Button>}
+          center={<div className="p2-mini">STORE</div>}
+          right={<TopActions><ConnectButton compact /></TopActions>}
+        />
 
         <Panel className="p2-panel" as="div">
           <div className="p2-panelTitle">Session Credits</div>

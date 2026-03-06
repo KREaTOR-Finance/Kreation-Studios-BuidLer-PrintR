@@ -2,7 +2,7 @@ import type { Express } from "express";
 
 import type { CreditsStore } from "../credits/store.js";
 import type { SessionRuntime } from "../engine/models.js";
-import { getPlayerRef, requirePlayerRef } from "../middleware/playerRef.js";
+import { requireAuth, type AuthedRequest, getWallet } from "../middleware/auth.js";
 import { issuePlayToken } from "../security/playTokens.js";
 import type { ReceiptsStore } from "../ledger/receiptsStore.js";
 import type { AnalyticsStore } from "../analytics/store.js";
@@ -33,16 +33,16 @@ export function registerCreditsRoutes(
     ? args.resumeGraceMs!
     : Number(process.env.SESSION_RESUME_GRACE_MS ?? 10 * 60_000);
 
-  app.get("/api/credits/balance", requirePlayerRef, async (req, res) => {
-    const playerRef = getPlayerRef(req);
-    const sessionsBalance = await credits.getBalance(playerRef);
-    return res.json({ playerRef, sessionsBalance });
+  app.get("/api/credits/balance", requireAuth, async (req, res) => {
+    const wallet = getWallet(req as any);
+    const sessionsBalance = await credits.getBalance(wallet);
+    return res.json({ wallet, sessionsBalance });
   });
 
-  app.post("/api/sessions/:sessionId/join", requirePlayerRef, async (req, res) => {
-    const playerRef = getPlayerRef(req);
+  app.post("/api/sessions/:sessionId/join", requireAuth, async (req, res) => {
+    const wallet = getWallet(req as any);
     const playerId = typeof (req.body as any)?.playerId === "string" ? String((req.body as any).playerId) : undefined;
-    if (limiter && !limiter.allow(`join:${playerRef}`, 12, 60_000)) {
+    if (limiter && !limiter.allow(`join:${wallet}`, 12, 60_000)) {
       return res.status(429).json({ error: "RATE_LIMITED" });
     }
 
@@ -58,10 +58,10 @@ export function registerCreditsRoutes(
         : (now >= s.closingTimeMs - 30_000 ? "FINAL_COMMIT_WARNING" : "LIVE"));
 
     if (phase === "CLOSING") {
-      const sessionsBalance = await credits.getBalance(playerRef);
+      const sessionsBalance = await credits.getBalance(wallet);
       if (entitlements) {
         await entitlements.upsert({
-          playerRef,
+          playerRef: wallet,
           sessionId,
           mode: "spectate",
           createdAt: now,
@@ -69,23 +69,23 @@ export function registerCreditsRoutes(
           expiresAt: s.endTimeMs + resumeGraceMs
         });
       }
-      console.info("join_spectate", { playerRef, sessionId, phase, sessionsBalance });
+      console.info("join_spectate", { wallet, sessionId, phase, sessionsBalance });
       return res.json({ join: "spectate", sessionId, phase, sessionsBalance });
     }
     if (phase !== "LIVE" && phase !== "FINAL_COMMIT_WARNING") {
-      console.warn("join_not_joinable", { playerRef, sessionId, phase });
+      console.warn("join_not_joinable", { wallet, sessionId, phase });
       return res.status(409).json({ error: "SESSION_NOT_JOINABLE" });
     }
 
     const idem = req.header("Idempotency-Key") ?? "";
-    const consume = await credits.consumeOneSession(playerRef, sessionId, idem);
+    const consume = await credits.consumeOneSession(wallet, sessionId, idem);
     if (!consume.ok) {
       if (consume.reason === "DUPLICATE") {
-        const sessionsBalance = await credits.getBalance(playerRef);
-        const token = issuePlayToken(playerRef, sessionId, playTokenTtlMs);
+        const sessionsBalance = await credits.getBalance(wallet);
+        const token = issuePlayToken(wallet, sessionId, playTokenTtlMs);
         if (entitlements) {
           await entitlements.upsert({
-            playerRef,
+            playerRef: wallet,
             sessionId,
             mode: "play",
             createdAt: now,
@@ -93,8 +93,8 @@ export function registerCreditsRoutes(
             expiresAt: s.endTimeMs + resumeGraceMs
           });
         }
-        args.onJoinPlay?.({ playerRef, sessionId, playerId });
-        console.info("join_duplicate", { playerRef, sessionId, sessionsBalance });
+        args.onJoinPlay?.({ playerRef: wallet, sessionId, playerId });
+        console.info("join_duplicate", { wallet, sessionId, sessionsBalance });
         return res.json({
           join: "play",
           sessionId,
@@ -105,10 +105,10 @@ export function registerCreditsRoutes(
         });
       }
 
-      const sessionsBalance = await credits.getBalance(playerRef);
+      const sessionsBalance = await credits.getBalance(wallet);
       if (entitlements) {
         await entitlements.upsert({
-          playerRef,
+          playerRef: wallet,
           sessionId,
           mode: "spectate",
           createdAt: now,
@@ -116,12 +116,12 @@ export function registerCreditsRoutes(
           expiresAt: s.endTimeMs + resumeGraceMs
         });
       }
-      console.warn("join_denied_insufficient", { playerRef, sessionId, sessionsBalance });
+      console.warn("join_denied_insufficient", { wallet, sessionId, sessionsBalance });
       return res.json({ join: "spectate", sessionId, phase, sessionsBalance });
     }
 
     receipts?.record({
-      playerRef,
+      playerRef: wallet,
       deltaSessions: -1,
       deltaPoints: 0,
       reason: "session_join",
@@ -131,16 +131,16 @@ export function registerCreditsRoutes(
     }).catch(() => {});
 
     analytics?.record({
-      playerRef,
+      playerRef: wallet,
       event: "session_joined",
       sessionId,
       meta: { phase }
     }).catch(() => {});
 
-    const token = issuePlayToken(playerRef, sessionId, playTokenTtlMs);
+    const token = issuePlayToken(wallet, sessionId, playTokenTtlMs);
     if (entitlements) {
       await entitlements.upsert({
-        playerRef,
+        playerRef: wallet,
         sessionId,
         mode: "play",
         createdAt: now,
@@ -148,9 +148,9 @@ export function registerCreditsRoutes(
         expiresAt: s.endTimeMs + resumeGraceMs
       });
     }
-    args.onJoinPlay?.({ playerRef, sessionId, playerId });
+    args.onJoinPlay?.({ playerRef: wallet, sessionId, playerId });
 
-    console.info("credit_consumed", { playerRef, sessionId, phase, sessionsBalance: consume.balance });
+    console.info("credit_consumed", { wallet, sessionId, phase, sessionsBalance: consume.balance });
     return res.json({
       join: "play",
       sessionId,

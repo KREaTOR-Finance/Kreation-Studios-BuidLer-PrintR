@@ -8,7 +8,10 @@
   --p2-accent:#82FFD6;
   --p2-accentInk:#03110B;
   --p2-warn:#FFCC66;
+  --p2-danger:#FF7878;
   --p2-dead:rgba(255,255,255,.18);
+
+  --p2-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
 
   --p2-r12:12px;
   --p2-r16:16px;

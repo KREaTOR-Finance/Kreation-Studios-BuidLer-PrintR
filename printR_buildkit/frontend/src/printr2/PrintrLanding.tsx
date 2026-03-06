@@ -5,7 +5,7 @@ import "./tokens.css";
 import "./ui.css";
 import "./screens.css";
 
-import { Button, Panel } from "./ui";
+import { Button, Panel, TopActions } from "./ui";
 import { ConnectButton } from "./wallet/ConnectButton";
 import { apiGet, apiPost } from "../network/httpClient";
 import { getPrintr2PlayerRef } from "./playerRef";
@@ -61,11 +61,11 @@ export function PrintrLanding(){
               <div className="p2-mini" style={{ marginTop: 2, letterSpacing: ".16em" }}>by Kreation Studios</div>
             </div>
           </div>
-          <div className="p2-topActions">
+          <TopActions>
             <Button variant="ghost" onClick={() => nav("/transparency")}>Transparency</Button>
             <Button variant="ghost" onClick={openTutorial}>How it works</Button>
             <ConnectButton compact />
-          </div>
+          </TopActions>
         </header>
 
         <main className="p2-hero">
@@ -103,7 +103,6 @@ export function PrintrLanding(){
                     onChange={(e) => setRefInput(e.target.value)}
                     placeholder="KRE-XXXXXXXX"
                     className="p2-input"
-                    style={{ height: 44, borderRadius: 12, padding: "0 12px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", color: "white" }}
                   />
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                     <Button

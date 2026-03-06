@@ -1,14 +1,14 @@
 import type { Express } from "express";
 
-import { getPlayerRef, requirePlayerRef } from "../middleware/playerRef.js";
+import { requireAuth, getWallet } from "../middleware/auth.js";
 import { BundleToSessions, createCheckoutUrl, type StripeBundle } from "../payments/stripe.js";
 import type { ReferralStore } from "../referrals/store.js";
 import type { AnalyticsStore } from "../analytics/store.js";
 
 export function registerPaymentsRoutes(app: Express, analytics?: AnalyticsStore, referrals?: ReferralStore) {
-  app.post("/api/payments/stripe/checkout", requirePlayerRef, async (req, res) => {
+  app.post("/api/payments/stripe/checkout", requireAuth, async (req, res) => {
     try {
-      const playerRef = getPlayerRef(req);
+      const playerRef = getWallet(req as any);
       const bundle = (req.body?.bundle ?? "BUNDLE_5") as StripeBundle;
       if (bundle !== "BUNDLE_1" && bundle !== "BUNDLE_5" && bundle !== "BUNDLE_15" && bundle !== "BUNDLE_99" && bundle !== "RESET_POINTS") {
         return res.status(400).json({ ok: false, error: "invalid_bundle" });

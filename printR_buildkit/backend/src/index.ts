@@ -37,6 +37,7 @@ import { SqliteAnalyticsStore } from "./analytics/sqliteAnalyticsStore.js";
 import { PostgresAnalyticsStore } from "./analytics/postgresAnalyticsStore.js";
 import { RateLimiter } from "./security/rateLimiter.js";
 import { registerCreditsRoutes } from "./routes/credits.js";
+import { requireAuth, getWallet } from "./middleware/auth.js";
 import { registerPaymentsRoutes } from "./routes/payments.js";
 import { registerReferralRoutes } from "./routes/referrals.js";
 import { SqliteReferralStore } from "./referrals/sqliteReferralStore.js";
@@ -50,6 +51,7 @@ import { registerPrizesRoutes } from "./routes/prizes.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerProofRoutes } from "./routes/proof.js";
 import { registerLeaderboardRoutes } from "./routes/leaderboard.js";
+import { registerAuthRoutes } from "./routes/auth.js";
 import { InMemoryEntitlementsStore } from "./sessions/entitlementsStore.js";
 import { InMemoryResultsStore, SqliteResultsStore, type ResultsStore } from "./leaderboard/resultsStore.js";
 
@@ -102,8 +104,10 @@ app.use(cors({
   origin: ORIGIN === "*" ? true : ORIGIN,
   allowedHeaders: [
     "content-type",
+    "authorization",
     "x-printr-player",
     "x-printr-wallet",
+    "x-printr-play-token",
     "idempotency-key"
   ]
 }));
@@ -121,6 +125,7 @@ if ((solanaPay as any).migrate) await (solanaPay as any).migrate();
 
 registerWebhookRoutes(app, { credits, rounds, prizes, receipts, analytics, referrals: referrals ?? undefined });
 app.use(express.json({ limit: "1mb" }));
+registerAuthRoutes(app);
 
 const server = http.createServer(app);
 
@@ -166,13 +171,13 @@ const vrfQueue = new VrfQueue(vrfProvider);
 const sessions = new Map<string, SessionRuntime>();
 type PlayerState = { commitsRemaining: number; scoreRealized: number; openPositionId?: string }; // commitsRemaining=COMMIT ammo for this session
 const playerState = new Map<string, Map<string, PlayerState>>(); // sessionId -> playerId -> state
-const playPermits = new Map<string, Set<string>>(); // sessionId -> playerId
+const playPermits = new Map<string, Set<string>>(); // sessionId -> wallet
 
-function grantPlay(sessionId: string, playerId: string) {
+function grantPlay(sessionId: string, wallet: string) {
   const set = playPermits.get(sessionId) ?? new Set<string>();
-  set.add(playerId);
+  set.add(wallet);
   playPermits.set(sessionId, set);
-  const ps = getPlayerState(sessionId, playerId);
+  const ps = getPlayerState(sessionId, wallet);
   ps.commitsRemaining = Math.max(ps.commitsRemaining, 10);
 }
 
@@ -390,6 +395,7 @@ registerCreditsRoutes(app, {
   limiter,
   playTokenTtlMs: Number(process.env.PLAY_TOKEN_TTL_MS ?? 60 * 60 * 1000),
   onJoinPlay: ({ sessionId, playerId }) => {
+    // playerId is now the authenticated wallet (WS canonical identity)
     if (sessionId && playerId) grantPlay(sessionId, playerId);
   }
 });

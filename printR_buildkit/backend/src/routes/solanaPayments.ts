@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { Keypair, PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
 import { getPriceFeed } from "../payments/priceFeed.js";
 
-import { requirePlayerRef, getPlayerRef } from "../middleware/playerRef.js";
+import { requireAuth, getWallet } from "../middleware/auth.js";
 import type { CreditsStore } from "../credits/store.js";
 import { BundleToSessions, BundleToUsdCents, type StripeBundle } from "../payments/stripe.js";
 import type { SolanaPayStore, SolanaCluster } from "../payments/solanaPayStore.js";
@@ -40,9 +40,9 @@ function getAssetFromReq(req: any): "SOL" | "SKR" {
 export function registerSolanaPaymentsRoutes(app: Express, args: { credits: CreditsStore; solanaPay: SolanaPayStore }){
   const { credits, solanaPay } = args;
 
-  app.post("/api/payments/solana/intent", requirePlayerRef, async (req, res) => {
+  app.post("/api/payments/solana/intent", requireAuth, async (req, res) => {
     try {
-      const playerRef = getPlayerRef(req);
+      const playerRef = getWallet(req as any);
       const bundle = (req.body?.bundle ?? "BUNDLE_5") as StripeBundle;
       if (bundle !== "BUNDLE_1" && bundle !== "BUNDLE_5" && bundle !== "BUNDLE_15" && bundle !== "BUNDLE_99" && bundle !== "RESET_POINTS") {
         return res.status(400).json({ ok: false, error: "invalid_bundle" });
@@ -102,9 +102,9 @@ export function registerSolanaPaymentsRoutes(app: Express, args: { credits: Cred
     }
   });
 
-  app.post("/api/payments/solana/confirm", requirePlayerRef, async (req, res) => {
+  app.post("/api/payments/solana/confirm", requireAuth, async (req, res) => {
     try {
-      const playerRef = getPlayerRef(req);
+      const playerRef = getWallet(req as any);
       const reference = String(req.body?.reference ?? "").trim();
       const signature = String(req.body?.signature ?? "").trim();
       if (!reference || !signature) return res.status(400).json({ ok: false, error: "missing_reference_or_signature" });

@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Panel } from "./ui";
+import { useNavigate } from "react-router-dom";
+import { Button, Panel, TopBar } from "./ui";
 import { backendHttpBase } from "./net";
+
+import "./tokens.css";
+import "./ui.css";
+import "./screens.css";
 
 type Row = {
   referralCode: string;
@@ -14,6 +19,7 @@ function fmtUsd(cents: number){
 }
 
 export function PrintrTransparency(){
+  const nav = useNavigate();
   const [rows, setRows] = useState<Row[]>([]);
   const [status, setStatus] = useState<"loading"|"ok"|"error">("loading");
 
@@ -35,15 +41,16 @@ export function PrintrTransparency(){
   }, []);
 
   return (
-    <div className="p2-page">
-      <div className="p2-top">
-        <div>
-          <div className="p2-title">Transparency</div>
-          <div className="p2-sub">Top referrals + policy receipts.</div>
-        </div>
-      </div>
+    <div className="p2-root">
+      <div className="p2-noise" />
+      <div className="p2-frame">
+        <TopBar
+          left={<Button variant="ghost" onClick={() => nav("/")}>Home</Button>}
+          center={<div className="p2-mini">TRANSPARENCY</div>}
+          right={null}
+        />
 
-      <Panel className="p2-panel" as="div">
+        <Panel className="p2-panel" as="div">
         <div className="p2-panelTitle">Top 20 Referrals</div>
         <div className="p2-panelSub">Ranked by total purchases made by referred users.</div>
 
@@ -51,7 +58,7 @@ export function PrintrTransparency(){
           <div className="p2-mini" style={{ marginTop: 10, opacity: 0.8 }}>Loading…</div>
         ) : null}
         {status === "error" ? (
-          <div className="p2-mini" style={{ marginTop: 10, color: "rgba(255,120,120,.95)" }}>Failed to load.</div>
+          <div className="p2-mini p2-error" style={{ marginTop: 10 }}>Failed to load.</div>
         ) : null}
 
         <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
@@ -79,7 +86,8 @@ export function PrintrTransparency(){
             (Receipts section coming next.)
           </div>
         </div>
-      </Panel>
+        </Panel>
+      </div>
     </div>
   );
 }

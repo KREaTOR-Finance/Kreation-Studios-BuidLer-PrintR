@@ -11,6 +11,7 @@ function defaultBase(): string {
 export const API_BASE = ENV_BASE ?? defaultBase();
 
 import { getStoredWalletPubkey } from "../printr2/wallet/WalletGate";
+import { getAuthToken } from "./auth";
 
 export type PlayerHeaders = {
   playerRef: string; // e.g. tg:123
@@ -20,9 +21,11 @@ export type PlayerHeaders = {
 export async function apiGet<T>(path: string, headers: PlayerHeaders): Promise<T> {
   const stored = getStoredWalletPubkey();
   const wallet = headers.walletPubkey ?? stored;
+  const token = getAuthToken();
   const res = await fetch(`${API_BASE}${path}`, {
     method: "GET",
     headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
       "x-printr-player": headers.playerRef,
       ...(wallet ? { "x-printr-wallet": wallet } : {})
     }
@@ -34,10 +37,12 @@ export async function apiGet<T>(path: string, headers: PlayerHeaders): Promise<T
 export async function apiPost<T>(path: string, body: any, headers: PlayerHeaders, extra?: Record<string,string>): Promise<T> {
   const stored = getStoredWalletPubkey();
   const wallet = headers.walletPubkey ?? stored;
+  const token = getAuthToken();
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
       "x-printr-player": headers.playerRef,
       ...(wallet ? { "x-printr-wallet": wallet } : {}),
       ...(extra ?? {})
